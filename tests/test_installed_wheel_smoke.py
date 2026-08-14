@@ -55,7 +55,7 @@ def test_installed_wheel_can_create_persistent_session(tmp_path: Path) -> None:
     lbe_exe = venv_dir / ("Scripts/lbe.exe" if os.name == "nt" else "bin/lbe")
 
     installed = _run(
-        [str(python_exe), "-m", "pip", "install", "--no-deps", str(wheels[0])],
+        [str(python_exe), "-m", "pip", "install", "--force-reinstall", "--no-deps", str(wheels[0])],
         cwd=repo_root,
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
