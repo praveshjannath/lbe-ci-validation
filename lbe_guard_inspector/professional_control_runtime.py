@@ -8,7 +8,7 @@ turn/session/provider/permission controls are implemented in later P8 slices.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol
 
 from .memory.operational_history import OperationalEvent, OperationalTurn, SessionOperationalHistory
 from .memory.store import WorkspaceMemoryStore
@@ -28,6 +28,13 @@ from .professional_control_protocol import (
 )
 
 
+class MutableControlOwner(Protocol):
+    """Existing runtime owner for mutations; never implemented by the UI."""
+    @property
+    def supported_methods(self) -> frozenset[ControlMethod]: ...
+    def handle_control(self, request: ControlRequest) -> ControlResponse: ...
+
+
 class ProfessionalControlRuntime:
     """Bounded request dispatcher for the first read-only P8 control slice."""
 
@@ -43,6 +50,7 @@ class ProfessionalControlRuntime:
         *,
         store: WorkspaceMemoryStore,
         history: SessionOperationalHistory,
+        mutable_owner: MutableControlOwner | None = None,
         runtime_name: str = "lbe-professional-runtime",
         runtime_version: str = "0.1",
     ) -> None:
@@ -61,6 +69,7 @@ class ProfessionalControlRuntime:
         self.runtime_name = runtime_name.strip()
         self.runtime_version = runtime_version.strip()
         self._client: ControlClientMetadata | None = None
+        self._mutable_owner = mutable_owner
 
     @property
     def initialized(self) -> bool:
@@ -72,6 +81,11 @@ class ProfessionalControlRuntime:
         try:
             require_supported_protocol_version(request.protocol_version)
             if request.method not in self._READ_ONLY_METHODS:
+                if self._mutable_owner is not None:
+                    response = self._mutable_owner.handle_control(request)
+                    if not isinstance(response, ControlResponse) or response.request_id != request.request_id:
+                        raise TypeError("mutable control owner must return matching ControlResponse")
+                    return response
                 return self._error(
                     request,
                     code="METHOD_NOT_IMPLEMENTED",
@@ -111,7 +125,7 @@ class ProfessionalControlRuntime:
             protocol_version=CONTROL_PROTOCOL_VERSION,
             runtime_name=self.runtime_name,
             runtime_version=self.runtime_version,
-            supported_methods=tuple(sorted(self._READ_ONLY_METHODS, key=lambda item: item.value)),
+            supported_methods=tuple(sorted(self._supported_methods(), key=lambda item: item.value)),
             supported_notifications=canonical_control_notifications(),
         )
         return ControlResponse(request_id=request.request_id, result={
@@ -121,6 +135,14 @@ class ProfessionalControlRuntime:
             "supported_methods": [item.value for item in result.supported_methods],
             "supported_notifications": [item.value for item in result.supported_notifications],
         })
+
+    def _supported_methods(self) -> frozenset[ControlMethod]:
+        if self._mutable_owner is None:
+            return self._READ_ONLY_METHODS
+        methods = self._mutable_owner.supported_methods
+        if not isinstance(methods, frozenset) or not all(isinstance(method, ControlMethod) for method in methods):
+            raise TypeError("mutable control owner supported_methods must be a frozenset of ControlMethod")
+        return self._READ_ONLY_METHODS | methods
 
     def _session_read(self, request: ControlRequest) -> ControlResponse:
         session_id = _param_text(request.params, "session_id")

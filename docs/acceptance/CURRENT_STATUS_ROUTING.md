@@ -108,6 +108,42 @@ P15 cooperative and strict external-agent acceptance
 P16 professional end-to-end acceptance
 ```
 
+## Evidence-level acceptance control
+
+Every unproven capability begins as `UNVERIFIED`. A status may change to `PASS`
+only when its recorded evidence meets or exceeds the capability's required
+evidence level. Implementation presence, handler existence, and a lower-level
+test are not substitutes for a higher-level proof claim.
+
+| Evidence level | What it proves |
+| --- | --- |
+| `UNIT` | Isolated behavior of the named unit only. |
+| `INTEGRATION` | Interaction among the named components only. |
+| `INSTALLED` | The packaged, installed execution path. |
+| `LIVE_RUNTIME` | A real configured runtime/provider/tool interaction. |
+| `USER_FLOW` | A complete user-facing interaction through the real control path. |
+| `RELEASE` | Distribution, fresh install, and release smoke requirements. |
+
+Each active acceptance matrix row must record: capability, status, current
+evidence, evidence level achieved, required evidence level, source/command or
+receipt, and remaining proof gap. It must not inherit `PASS` from a related
+capability.
+
+| Capability | Initial status | Minimum required evidence level |
+| --- | --- | --- |
+| Session task and steering | `UNVERIFIED` | `LIVE_RUNTIME` |
+| Interrupt and cancel | `UNVERIFIED` | `LIVE_RUNTIME` |
+| Provider selection/switch | `UNVERIFIED` | `INSTALLED` + `LIVE_RUNTIME` |
+| Approval response and governed action | `UNVERIFIED` | `USER_FLOW` |
+| Transcript replay/resume | `UNVERIFIED` | `USER_FLOW` |
+| CLI/TUI interactive command surface | `UNVERIFIED` | `USER_FLOW` |
+| Python-version support | `UNVERIFIED` | `INSTALLED` + full relevant suite |
+| Package publication/installability | `UNVERIFIED` | `RELEASE` |
+
+Release readiness is supported only after every required scope row is `PASS`
+at its own required level. It is never inferred from an implementation diff,
+unit suite, CI startup, or a successful install alone.
+
 P0/P1 must explicitly distinguish:
 
 ```text

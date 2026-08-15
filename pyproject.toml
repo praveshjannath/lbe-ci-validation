@@ -17,6 +17,9 @@ test = [
   "build==1.5.0",
   "pytest==8.3.5"
 ]
+tui = [
+  "textual>=0.58,<1",
+]
 
 [project.scripts]
 lbe = "lbe_guard_inspector.cli:main"

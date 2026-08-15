@@ -17,12 +17,17 @@ from uuid import uuid4
 from .agent_integration import AgentMode, AgentRequestEnvelope, GovernedAgentGateway
 from .evidence_service import EvidenceService
 from .memory import WorkspaceMemoryStore
+from .memory.operational_history import SessionOperationalHistory
 from .provider_health import check_provider_health
 from .provider_registry import default_provider_registry
 from .reasoning_config import load_provider_config
 from .reasoning_runtime import build_provider_controller
 from .runtime.completion_runtime import CodingCompletionRuntime
 from .session_memory_runtime import SessionMemoryRuntimeBridge
+from .professional_control_runtime import ProfessionalControlRuntime
+from .professional_control_protocol import ControlMethod, ControlRequest, ControlResponse
+from .professional_mutable_control import PersistentTurnControlOwner
+from .textual_tui import run_transcript_tui
 
 
 _MODES = ("coding", "audit", "investigation")
@@ -126,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--session-id", required=True)
     validate.add_argument("--task-id", required=True)
     validate.set_defaults(handler=_session_validate)
+
+    tui = commands.add_parser("tui", help="Open the persisted session transcript in Textual")
+    _add_database_argument(tui)
+    tui.add_argument("--session-id", required=True)
+    tui.set_defaults(handler=_tui_open)
 
     provider = commands.add_parser("provider", help="Inspect or select reasoning providers")
     provider_commands = provider.add_subparsers(dest="provider_command", required=True)
@@ -358,6 +368,40 @@ def _session_validate(args: argparse.Namespace) -> dict[str, Any]:
         },
         "task": _task_payload(task),
     }
+
+
+def _tui_open(args: argparse.Namespace) -> dict[str, Any]:
+    store = WorkspaceMemoryStore(args.database)
+    state = _require_session(store, args.session_id)
+    history = SessionOperationalHistory(store=store)
+    runtime = ProfessionalControlRuntime(
+        store=store,
+        history=history,
+        mutable_owner=PersistentTurnControlOwner(history=history),
+    )
+    initialize = runtime.handle(ControlRequest(
+        request_id="cli-tui-initialize",
+        method=ControlMethod.INITIALIZE,
+        params={"client": {
+            "client_name": "lbe-textual-tui",
+            "client_version": "0.1",
+            "client_kind": "tui",
+            "supported_protocol_version": "1.0",
+        }},
+    ))
+    if initialize.error is not None:
+        raise RuntimeError(f"could not initialize TUI control protocol: {initialize.error.message}")
+    run_transcript_tui(history=history, session_id=state.session_id, control=_RuntimeControlTransport(runtime))
+    return {"action": "tui.open", "session_id": state.session_id}
+
+
+class _RuntimeControlTransport:
+    """Thin local typed-protocol transport; does not own runtime state."""
+    def __init__(self, runtime: ProfessionalControlRuntime) -> None:
+        self.runtime = runtime
+
+    def call(self, request: ControlRequest) -> ControlResponse:
+        return self.runtime.handle(request)
 
 
 def _provider_list(args: argparse.Namespace) -> dict[str, Any]:

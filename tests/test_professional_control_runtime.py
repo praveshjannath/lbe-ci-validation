@@ -7,7 +7,7 @@ from lbe_guard_inspector.memory.operational_history import (
     TurnStatus,
 )
 from lbe_guard_inspector.memory.store import WorkspaceMemoryStore
-from lbe_guard_inspector.professional_control_protocol import ControlMethod, ControlRequest
+from lbe_guard_inspector.professional_control_protocol import ControlMethod, ControlRequest, ControlResponse
 from lbe_guard_inspector.professional_control_runtime import ProfessionalControlRuntime
 
 
@@ -182,3 +182,18 @@ def test_mutable_control_methods_are_not_falsely_advertised_or_executed(tmp_path
     ))
     assert response.result is None
     assert response.error.code == "METHOD_NOT_IMPLEMENTED"
+
+
+def test_mutable_controls_delegate_to_existing_runtime_owner(tmp_path) -> None:
+    store, history, _ = _runtime(tmp_path)
+    class Owner:
+        @property
+        def supported_methods(self):
+            return frozenset({ControlMethod.TURN_STEER})
+        def handle_control(self, request):
+            return ControlResponse(request_id=request.request_id, result={"accepted": request.method.value})
+    runtime = ProfessionalControlRuntime(store=store, history=history, mutable_owner=Owner())
+    _initialize(runtime)
+    response = runtime.handle(_request("steer-1", ControlMethod.TURN_STEER, session_id="session-1", text="change direction"))
+    assert response.result == {"accepted": "turn.steer"}
+    assert "turn.steer" in _initialize(runtime).result["supported_methods"]
