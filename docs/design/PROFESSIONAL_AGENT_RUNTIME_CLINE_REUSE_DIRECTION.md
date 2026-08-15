@@ -236,6 +236,32 @@ backend replacement behind the adapter
 
 If `@cline/agents` cannot use host-provided governed tool execution cleanly, LBE will reuse only `@cline/llms` and own P7 itself.
 
+### Current decision record — 2026-08-15
+
+This record applies only to the exact evaluated pin below. It does not make a
+claim about later Cline versions.
+
+| Gate | Evidence level | Result |
+| --- | --- | --- |
+| Exact `@cline/llms@0.0.73` pin | `INSTALLED` | PASS — installed sidecar and manifest match the pinned package. |
+| Sidecar runtime prerequisite | `INSTALLED` | PASS — Node `v24.15.0` and isolated sidecar readiness probe passed. |
+| Event mapping and identity correlation | `INTEGRATION` | PASS — compatibility and sidecar-adapter tests preserve text, tool, continuation, and correlation boundaries. |
+| LBE result to continuation serialization | `INTEGRATION` | PASS — adapter regression covers exact provider/LBE receipt correlation. |
+| Cancellation propagation | `LIVE_RUNTIME` | UNVERIFIED — no real provider stream has been cancelled through the sidecar. |
+| Pre-mutation LBE interception | `USER_FLOW` | UNVERIFIED — no real provider tool proposal has reached `GovernedToolOrchestrator`. |
+| No second authority | `INTEGRATION` | PASS for the adapter boundary; `USER_FLOW` remains UNVERIFIED. |
+| Dependency and license review | `INSTALLED` | FAIL — the resolved package tree reports one high and one moderate vulnerability; package metadata did not supply a license value in the evaluated registry response. |
+
+**Decision: `NATIVE` for production P3/P7 at this pin.** The evaluated Cline
+sidecar is useful compatibility evidence, but it must not become a production
+runtime dependency while the dependency-security gate fails. P7 must remain
+LBE-owned unless a future exact Cline pin passes every P7 gate, including
+pre-mutation interception and live cancellation.
+
+The decision does not invalidate the Cline-first evaluation order. A later
+explicitly pinned version may be evaluated through this same table before any
+reuse decision changes.
+
 ---
 
 ## 5. Why not adopt ClineCore wholesale

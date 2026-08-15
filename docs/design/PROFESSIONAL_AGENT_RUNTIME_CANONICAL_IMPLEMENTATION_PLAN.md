@@ -565,6 +565,14 @@ Introduce a professional provider path without breaking the accepted bounded 0.2
 
 Do not blindly replace `OpenAICompatibleReasoningBackend._complete()` or the first-party bounded adapters.
 
+**Default implementation strategy:** before independently implementing any
+provider transport, streaming parser, tool-call grammar, retry mechanism, or
+context-management path, complete the `@cline/llms` compatibility decision
+artifact required by
+`PROFESSIONAL_AGENT_RUNTIME_CLINE_REUSE_DIRECTION.md`. The pinned Cline lower
+layer is evaluated first; native LBE transport is a documented fallback, not
+the default assumption.
+
 At implementation time classify each current owner as:
 
 ```text
@@ -586,6 +594,12 @@ Each professional adapter emits normalized P0 events and accepts provider-contin
 - complete one-shot tool calls remain complete without fabricated deltas;
 - cancellation behavior is provider-correct;
 - bounded 0.2.1 path remains regression-tested.
+
+P3 cannot proceed from implementation presence alone. Its decision artifact
+must record the exact Cline package/source pin, event-fidelity result,
+cancellation result, identity-correlation result, dependency/license result,
+authority-boundary result, and a per-provider decision of `REUSE`, `PARTIAL
+REUSE`, or `NATIVE`.
 
 ---
 
@@ -720,6 +734,13 @@ Events originate from existing runtime owners or their explicit backend extensio
 
 Turn one provider response into a persistent professional agent loop.
 
+**Default implementation strategy:** evaluate the pinned `@cline/agents`
+continuation loop only after P3's `@cline/llms` decision. It may be reused only
+when every tool proposal is intercepted before mutation, all execution remains
+with `GovernedToolOrchestrator`, and the exact LBE receipt/evidence result can
+be serialized back to the provider. Otherwise retain the same adapter boundary
+and implement continuation in LBE.
+
 Canonical loop:
 
 ```text
@@ -745,6 +766,13 @@ Stop/continue decisions must distinguish:
 - terminal completion;
 - unsupported capability;
 - credential/manual blocker.
+
+P7 cannot adopt an agent layer unless its decision artifact records `PASS` or
+`FAIL` for pre-mutation interception, LBE-result-to-continuation correlation,
+cancellation propagation, durable identity preservation, no-second-authority,
+and dependency/license review. The only allowed decisions are `REUSE`,
+`PARTIAL REUSE`, or `NATIVE`; a failed gate must select a lower Cline layer or
+native LBE, never a bypass.
 
 ---
 

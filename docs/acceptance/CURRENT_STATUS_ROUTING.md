@@ -42,15 +42,16 @@ For current work, read in this order:
 2. `docs/design/PROFESSIONAL_AGENT_RUNTIME_CANONICAL_IMPLEMENTATION_PLAN.md` — independent GitHub-grounded forward plan and cross-plan comparison protocol.
 3. `docs/design/PROFESSIONAL_AGENT_RUNTIME_P0_P1_IMPLEMENTATION_GATE.md` — immediate implementation gate; P0 provider event normalization and P1 professional runtime capability contract must be reviewed before P2 or Session/Turn/Item event implementation.
 4. `docs/design/PROFESSIONAL_AGENT_RUNTIME_P0_P1_PROVIDER_MAPPING_AND_AUTHORIZATION_CORRECTIONS.md` — exact provider-mapping and R6C authorization corrections controlling conflicting earlier P0/P1 drafts.
-5. `docs/research/POST_V1_PROFESSIONAL_AGENT_CLI_PROVIDER_RUNTIME_RESEARCH.md` — provider/runtime/CLI research evidence underlying the pillar.
-6. `docs/design/LBE_AGENT_RUNTIME_CLI_TUI_AND_TOOL_ACCESS_SPEC.md` — agent interaction and governed tool-access design gate.
-7. `docs/design/LBE_AGENT_RUNTIME_USER_STEERING_EXTERNAL_CLIENT_AND_CONTROL_PROTOCOL_ADDENDUM.md` — active user steering, external-agent boundary, MCP vs control protocol, provenance.
-8. `README.md` — current CLI-first product identity and user-facing architecture.
-9. `docs/IMPLEMENTATION_PLAN.md` — established persistent-runtime architecture and implementation history; reconcile it with the professional-agent pillar/canonical plan for new post-V1 work.
-10. `docs/acceptance/C5_R7_ACCEPTANCE_RECORD.md` — accepted persistent-runtime V1 proof record.
-11. `docs/acceptance/POST_V1_RELEASE_PACKAGE_READINESS.md` — Python package/install readiness.
-12. `docs/acceptance/POST_V1_NPM_CONSUMER_DISTRIBUTION_READINESS.md` — npm bootstrap/public-consumer release evidence.
-13. current Git/source/runtime/provider/registry evidence.
+5. `docs/design/PROFESSIONAL_AGENT_RUNTIME_CLINE_REUSE_DIRECTION.md` — mandatory P3/P7 Cline lower-layer evaluation and LBE authority boundary.
+6. `docs/research/POST_V1_PROFESSIONAL_AGENT_CLI_PROVIDER_RUNTIME_RESEARCH.md` — provider/runtime/CLI research evidence underlying the pillar.
+7. `docs/design/LBE_AGENT_RUNTIME_CLI_TUI_AND_TOOL_ACCESS_SPEC.md` — agent interaction and governed tool-access design gate.
+8. `docs/design/LBE_AGENT_RUNTIME_USER_STEERING_EXTERNAL_CLIENT_AND_CONTROL_PROTOCOL_ADDENDUM.md` — active user steering, external-agent boundary, MCP vs control protocol, provenance.
+9. `README.md` — current CLI-first product identity and user-facing architecture.
+10. `docs/IMPLEMENTATION_PLAN.md` — established persistent-runtime architecture and implementation history; reconcile it with the professional-agent pillar/canonical plan for new post-V1 work.
+11. `docs/acceptance/C5_R7_ACCEPTANCE_RECORD.md` — accepted persistent-runtime V1 proof record.
+12. `docs/acceptance/POST_V1_RELEASE_PACKAGE_READINESS.md` — Python package/install readiness.
+13. `docs/acceptance/POST_V1_NPM_CONSUMER_DISTRIBUTION_READINESS.md` — npm bootstrap/public-consumer release evidence.
+14. current Git/source/runtime/provider/registry evidence.
 
 Current distribution routing remains:
 
