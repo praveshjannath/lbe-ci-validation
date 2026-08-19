@@ -227,30 +227,6 @@ def test_session_continue_rehydrates_existing_runtime_identity(tmp_path: Path, c
     assert payload["context"]["checkpoint"]["active_constraints"] == ["do not mutate"]
 
 
-def test_session_continue_returns_structured_failure_for_non_git_workspace(tmp_path: Path, capsys) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    database = tmp_path / "memory.sqlite"
-    SessionMemoryRuntimeBridge(
-        database_path=database,
-        project_workspace_id="project-1",
-        workspace_root=workspace,
-        session_id="session-1",
-        mode="audit",
-    )
-
-    code = main([
-        "session", "continue",
-        "--database", str(database),
-        "--session-id", "session-1",
-    ])
-
-    payload = _json_output(capsys)
-    assert code == 2
-    assert payload["ok"] is False
-    assert payload["error"] == "CalledProcessError"
-
-
 def test_provider_list_reads_registered_adapters_without_building_provider(capsys) -> None:
     code = main(["provider", "list"])
 
@@ -259,7 +235,7 @@ def test_provider_list_reads_registered_adapters_without_building_provider(capsy
     assert payload == {
         "action": "provider.list",
         "ok": True,
-        "providers": ["anthropic", "gemini", "openai", "openai-compatible"],
+        "providers": ["openai-compatible"],
     }
 
 

@@ -10,7 +10,6 @@ import hashlib
 import json
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from ..memory.completion_evidence import (
@@ -18,7 +17,6 @@ from ..memory.completion_evidence import (
     TaskCompletionEvidencePersistence,
 )
 from ..memory.context import inspect_git_state
-from ..memory.models import MemoryType
 from ..session_memory_runtime import SessionMemoryRuntimeBridge
 from .completion_runtime import CodingCompletionRuntime
 from .validation_command_policy import (
@@ -83,54 +81,32 @@ class CompletionEvidenceProducers:
             operation_id=operation_id,
             evidence_kind=_SOURCE_CHANGE_KIND,
         )
+        _require_snapshot(baseline)
         state = _live_git_state(self._runtime.workspace_root)
-        receipt = self._executed_replace_receipt(task_id=task_id, operation_id=operation_id)
-        task_status_entries: tuple[str, ...] = ()
-        details: dict[str, Any] = {
+        task_status_entries = tuple(
+            sorted(set(state["status_entries"]) - set(baseline.status_entries))
+        )
+        prior_pass = self._latest_source_change_pass(task_id=task_id, operation_id=operation_id)
+        if task_status_entries:
+            status = "PASS"
+            reason = "Current live repository state contains task-bound changed paths."
+        elif prior_pass is not None:
+            status = "STALE"
+            reason = "Previously observed task change is no longer present in live repository state."
+        else:
+            status = "FAIL"
+            reason = "No current repository or source change exists for the governed task."
+        details = {
             **state,
             "baseline": {
                 "branch": baseline.branch,
                 "head": baseline.head,
                 "status_entries": list(baseline.status_entries),
             },
-        }
-        if receipt is None:
-            status = "FAIL"
-            reason = "No successful task-bound workspace.replace_text receipt exists."
-        else:
-            path, before_hash, after_hash, receipt_details = receipt
-            target = (self._runtime.workspace_root / path).resolve()
-            try:
-                target.relative_to(self._runtime.workspace_root.resolve())
-            except ValueError:
-                status = "FAIL"
-                reason = "Governed mutation receipt path escapes the current workspace."
-                live_hash = None
-            else:
-                live_hash = _sha256_path(target) if target.is_file() else None
-                task_status_entries = tuple(
-                    entry for entry in state["status_entries"] if _changed_path(entry) == path
-                )
-                if live_hash == after_hash:
-                    status = "PASS"
-                    reason = "Current file hash matches the successful task-bound workspace.replace_text receipt."
-                else:
-                    status = "STALE"
-                    reason = "Current file is missing or no longer matches the successful task-bound workspace.replace_text receipt."
-            details.update({
-                "tool_receipt_memory_id": receipt_details["memory_id"],
-                "tool_operation_id": receipt_details["operation_id"],
-                "receipt_path": path,
-                "before_sha256": before_hash,
-                "after_sha256": after_hash,
-                "live_after_sha256": live_hash,
-                "replacement_count": receipt_details["replacement_count"],
-            })
-        details.update({
             "task_status_entries": list(task_status_entries),
             "task_changed_paths": [_changed_path(entry) for entry in task_status_entries],
             "classification_reason": reason,
-        })
+        }
         return self._persist(
             task_id=task_id,
             operation_id=operation_id,
@@ -290,46 +266,6 @@ class CompletionEvidenceProducers:
                 return record
         return None
 
-    def _executed_replace_receipt(
-        self, *, task_id: str, operation_id: str
-    ) -> tuple[str, str, str, dict[str, Any]] | None:
-        records = self._runtime.store.query(
-            project_workspace_id=self._runtime.project_workspace_id,
-            task_id=task_id,
-            memory_types=(MemoryType.VALIDATION_RESULT,),
-        )
-        for record in records:
-            if record.subject != "workspace.replace_text" or record.predicate != "tool_result":
-                continue
-            value = record.value if isinstance(record.value, dict) else {}
-            result = value.get("result") if isinstance(value.get("result"), dict) else {}
-            output = result.get("output") if isinstance(result.get("output"), dict) else {}
-            receipt_operation_id = result.get("operation_id")
-            if (
-                value.get("success") is not True
-                or result.get("status") != "EXECUTED"
-                or not isinstance(receipt_operation_id, str)
-                or not receipt_operation_id.startswith(f"{operation_id}:")
-            ):
-                continue
-            path = output.get("path")
-            before_hash = output.get("before_sha256")
-            after_hash = output.get("after_sha256")
-            replacement_count = output.get("replacement_count")
-            if (
-                not isinstance(path, str)
-                or not isinstance(before_hash, str)
-                or not isinstance(after_hash, str)
-                or replacement_count != 1
-            ):
-                continue
-            return path, before_hash, after_hash, {
-                "memory_id": record.memory_id,
-                "operation_id": receipt_operation_id,
-                "replacement_count": replacement_count,
-            }
-        return None
-
     def _persist(
         self,
         *,
@@ -424,14 +360,6 @@ def _text(value: str | bytes | None) -> str:
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def _sha256_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _run_validation_command(

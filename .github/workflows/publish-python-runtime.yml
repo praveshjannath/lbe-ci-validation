@@ -2,9 +2,6 @@ name: publish-python-runtime
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "release/python-runtime-v2.0.1"
 
 permissions:
   contents: read
@@ -21,15 +18,29 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify exact public runtime version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: lbe_guard_inspector/runtime/cline_worker/package-lock.json
+
+      - name: Read canonical Python package metadata
+        id: package
+        shell: bash
         run: |
-          python - <<'PY'
+          python - <<'PY' >> "$GITHUB_OUTPUT"
           import tomllib
           from pathlib import Path
+
           data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          assert data["project"]["name"] == "lbe-guard-inspector"
-          assert data["project"]["version"] == "2.0.1"
-          print("PYPI_RUNTIME_VERSION=2.0.1")
+          name = data["project"]["name"]
+          version = data["project"]["version"]
+          assert name == "lbe-guard-inspector"
+          assert version and version.strip() == version
+          print(f"name={name}")
+          print(f"version={version}")
+          print(f"wheel=lbe_guard_inspector-{version}-py3-none-any.whl")
+          print(f"sdist=lbe_guard_inspector-{version}.tar.gz")
           PY
 
       - name: Install build/test dependencies
@@ -44,14 +55,21 @@ jobs:
         run: python -m build
 
       - name: Verify release artifacts
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          WHEEL_NAME: ${{ steps.package.outputs.wheel }}
+          SDIST_NAME: ${{ steps.package.outputs.sdist }}
         run: |
-          test -f dist/lbe_guard_inspector-2.0.1-py3-none-any.whl
-          test -f dist/lbe_guard_inspector-2.0.1.tar.gz
-          python -m pip install --force-reinstall dist/lbe_guard_inspector-2.0.1-py3-none-any.whl
+          test -f "dist/${WHEEL_NAME}"
+          test -f "dist/${SDIST_NAME}"
+          python -m pip install --force-reinstall "dist/${WHEEL_NAME}"
           python - <<'PY'
+          import os
           from importlib.metadata import version
-          assert version("lbe-guard-inspector") == "2.0.1"
-          print("PYPI_RUNTIME_ARTIFACT_VERIFY=PASS")
+
+          expected = os.environ["PACKAGE_VERSION"]
+          assert version("lbe-guard-inspector") == expected
+          print(f"PYPI_RUNTIME_ARTIFACT_VERIFY=PASS version={expected}")
           PY
 
       - name: Publish Python runtime to PyPI

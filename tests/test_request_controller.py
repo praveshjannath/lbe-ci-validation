@@ -5,10 +5,9 @@ from pathlib import Path
 import pytest
 
 from agent import Context, KnowledgeRoot
-from lbe_guard_inspector.coding_reasoning_provider import PlannedToolRequest, ToolAwareReasoningPlan
 from lbe_guard_inspector.proposal_planner import ProposalOutcome
 from lbe_guard_inspector.request_controller import LBERequestController
-from lbe_guard_inspector.reasoning_contracts import EvidenceRequest, LBERequest
+from lbe_guard_inspector.reasoning_contracts import LBERequest
 
 
 class FakeBackend:
@@ -221,29 +220,6 @@ def test_plan_rejects_unknown_or_unbounded_requests(tmp_path, plan, code):
     assert response.outcome == "ORCHESTRATION_ERROR"
     assert response.error.code == code
     assert runner.calls == []
-
-
-def test_known_but_unapproved_tool_request_reaches_governed_tool_boundary(tmp_path):
-    controller, _, workspace = _controller(tmp_path, FakeBackend(_plan()))
-    plan = ToolAwareReasoningPlan(
-        interpreted_problem="attempt a bounded replacement",
-        ambiguities=(),
-        candidate_guard_ids=("cep.manifest_exists",),
-        evidence_requests=(EvidenceRequest("workspace.read", "README.md", "current source"),),
-        validation_requests=(),
-        explanation_focus=(),
-        tool_requests=(
-            PlannedToolRequest(
-                tool_id="workspace.replace_text",
-                path="README.md",
-                old_text="before",
-                new_text="after",
-                reason="authorization proof",
-            ),
-        ),
-    )
-
-    controller._validate_plan(plan, workspace, ("cep.manifest_exists",))
 
 
 def test_guard_planner_stops_on_ambiguous_approved_guards(tmp_path):

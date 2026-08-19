@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "repository": "Letterblack0306/LBE_Presistent_Agent_wall",
+  "remote": "origin",
+  "required_branch": "main",
+  "required_remote_ref": "refs/heads/main",
+  "require_primary_worktree": true,
+  "deny_detached_head": true,
+  "deny_secondary_worktree_writes": true,
+  "deny_branch_creation": true,
+  "deny_worktree_creation": true,
+  "deny_non_main_push": true,
+  "deny_non_origin_push": true,
+  "fail_closed": true,
+  "note": "Canonical implementation and delivery authority is the primary worktree on main. Side branches/worktrees are read-only reference material unless this file is explicitly changed by the user on main."
+}

@@ -120,6 +120,52 @@ CREATE TABLE IF NOT EXISTS session_tasks (
 CREATE INDEX IF NOT EXISTS idx_session_tasks_session
     ON session_tasks(session_id, updated_at DESC);
 
+CREATE TABLE IF NOT EXISTS operational_turns (
+    turn_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running','completed','failed','cancelled','incomplete','refused','escalated')),
+    created_at TEXT NOT NULL,
+    finalized_at TEXT,
+    FOREIGN KEY (session_id) REFERENCES session_state(session_id)
+);
+
+CREATE TABLE IF NOT EXISTS operational_items (
+    item_id TEXT PRIMARY KEY,
+    turn_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running','completed','failed','cancelled','denied','escalated')),
+    created_at TEXT NOT NULL,
+    finalized_at TEXT,
+    FOREIGN KEY (turn_id) REFERENCES operational_turns(turn_id)
+);
+
+CREATE TABLE IF NOT EXISTS operational_events (
+    event_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    item_id TEXT,
+    session_sequence INTEGER NOT NULL,
+    turn_sequence INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    provider_id TEXT,
+    model_id TEXT,
+    provider_request_id TEXT,
+    provider_item_id TEXT,
+    provider_tool_call_id TEXT,
+    lbe_call_id TEXT,
+    runtime_operation_id TEXT,
+    tool_receipt_id TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, session_sequence),
+    UNIQUE(turn_id, turn_sequence),
+    FOREIGN KEY (turn_id) REFERENCES operational_turns(turn_id),
+    FOREIGN KEY (item_id) REFERENCES operational_items(item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_operational_events_turn
+    ON operational_events(turn_id, turn_sequence);
+
 CREATE TABLE IF NOT EXISTS task_completion_contracts (
     session_id TEXT NOT NULL,
     task_id TEXT NOT NULL,
@@ -153,76 +199,3 @@ CREATE TABLE IF NOT EXISTS task_completion_evidence (
 
 CREATE INDEX IF NOT EXISTS idx_task_completion_evidence_task
     ON task_completion_evidence(project_workspace_id, task_id, created_at DESC);
-
--- P4 professional operational history. These tables extend the authoritative
--- session database; they are not a separate event recorder/history database.
-CREATE TABLE IF NOT EXISTS runtime_turns (
-    turn_id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    ordinal INTEGER NOT NULL CHECK (ordinal > 0),
-    status TEXT NOT NULL CHECK (status IN (
-        'in_progress','completed','incomplete','refused','cancelled','failed','escalated'
-    )),
-    created_at TEXT NOT NULL,
-    finalized_at TEXT,
-    UNIQUE (session_id, ordinal),
-    FOREIGN KEY (session_id) REFERENCES session_state(session_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_runtime_turns_session
-    ON runtime_turns(session_id, ordinal);
-
-CREATE TABLE IF NOT EXISTS runtime_items (
-    item_id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    turn_id TEXT NOT NULL,
-    ordinal INTEGER NOT NULL CHECK (ordinal > 0),
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN (
-        'in_progress','completed','failed','cancelled','denied','escalated'
-    )),
-    created_at TEXT NOT NULL,
-    finalized_at TEXT,
-    UNIQUE (turn_id, ordinal),
-    FOREIGN KEY (session_id) REFERENCES session_state(session_id),
-    FOREIGN KEY (turn_id) REFERENCES runtime_turns(turn_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_runtime_items_turn
-    ON runtime_items(turn_id, ordinal);
-
-CREATE TABLE IF NOT EXISTS runtime_events (
-    event_id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    turn_id TEXT NOT NULL,
-    item_id TEXT,
-    session_sequence INTEGER NOT NULL CHECK (session_sequence > 0),
-    turn_sequence INTEGER NOT NULL CHECK (turn_sequence > 0),
-    event_type TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    provider_id TEXT,
-    model_id TEXT,
-    provider_request_id TEXT,
-    provider_item_id TEXT,
-    provider_tool_call_id TEXT,
-    lbe_call_id TEXT,
-    runtime_operation_id TEXT,
-    tool_receipt_id TEXT,
-    provider_state_metadata_ref TEXT,
-    raw_diagnostic_ref TEXT,
-    created_at TEXT NOT NULL,
-    UNIQUE (session_id, session_sequence),
-    UNIQUE (turn_id, turn_sequence),
-    FOREIGN KEY (session_id) REFERENCES session_state(session_id),
-    FOREIGN KEY (turn_id) REFERENCES runtime_turns(turn_id),
-    FOREIGN KEY (item_id) REFERENCES runtime_items(item_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_runtime_events_session
-    ON runtime_events(session_id, session_sequence);
-CREATE INDEX IF NOT EXISTS idx_runtime_events_turn
-    ON runtime_events(turn_id, turn_sequence);
-CREATE INDEX IF NOT EXISTS idx_runtime_events_item
-    ON runtime_events(item_id, turn_sequence);
-CREATE INDEX IF NOT EXISTS idx_runtime_events_call
-    ON runtime_events(lbe_call_id, runtime_operation_id, tool_receipt_id);

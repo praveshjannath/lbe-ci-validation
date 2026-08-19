@@ -1,29 +1,26 @@
-from __future__ import annotations
-
 import pytest
 
 from lbe_guard_inspector.professional_provider_events import (
     ModelEventType,
     NormalizedModelEvent,
-    ProfessionalProviderAdapter,
-    ProviderToolDefinition,
-    ProviderToolResultContinuation,
-    ProviderTurnRequest,
+    ProviderProtocolFamily,
 )
-from lbe_guard_inspector.provider_capabilities import ProviderProtocolFamily
 
 
-def _event(event_type: ModelEventType, **kwargs: object) -> NormalizedModelEvent:
-    return NormalizedModelEvent(
-        event_type=event_type,
-        provider_id="openai-compatible",
-        model_id="model-a",
-        protocol_family=ProviderProtocolFamily.OPENAI_COMPATIBLE_CHAT,
-        **kwargs,
-    )
+def _event(**values):
+    defaults = {
+        "event_type": ModelEventType.MESSAGE_DELTA,
+        "provider_id": "openai-compatible",
+        "model_id": "model-a",
+        "protocol_family": ProviderProtocolFamily.OPENAI_COMPATIBLE_CHAT,
+        "text": "hello",
+        "provider_request_id": "provider-request-1",
+    }
+    defaults.update(values)
+    return NormalizedModelEvent(**defaults)
 
 
-def test_p0_event_vocabulary_is_exactly_frozen_contract() -> None:
+def test_p0_event_and_protocol_vocabularies_are_exact() -> None:
     assert {item.value for item in ModelEventType} == {
         "model.turn.started",
         "model.message.delta",
@@ -42,118 +39,46 @@ def test_p0_event_vocabulary_is_exactly_frozen_contract() -> None:
         "model.cancelled",
         "model.error",
     }
+    assert {item.value for item in ProviderProtocolFamily} == {
+        "openai_responses",
+        "anthropic_messages",
+        "gemini_interactions",
+        "gemini_generate_content",
+        "openai_compatible_chat",
+        "unknown",
+    }
+    assert "model.tool_call.result" not in {item.value for item in ModelEventType}
+    assert ModelEventType.TURN_REQUIRES_TOOL is not ModelEventType.TURN_REQUIRES_CONTINUATION
 
 
-def test_incremental_events_require_real_non_empty_delta() -> None:
-    with pytest.raises(ValueError, match="text must be a non-empty string"):
-        _event(ModelEventType.MESSAGE_DELTA, text="")
-
-    event = _event(ModelEventType.MESSAGE_DELTA, text="actual provider delta")
-    assert event.text == "actual provider delta"
-
-
-def test_one_shot_tool_call_needs_no_fabricated_argument_delta() -> None:
-    event = _event(
-        ModelEventType.TOOL_CALL_COMPLETED,
-        provider_tool_call_id="provider-call-7",
-        lbe_call_id="lbe-call-7",
-        tool_name="workspace.read",
-        tool_arguments={"path": "README.md"},
-    )
-
-    assert event.event_type is ModelEventType.TOOL_CALL_COMPLETED
-    assert event.tool_arguments == {"path": "README.md"}
-    assert event.text is None
-
-
-def test_tool_call_identity_keeps_provider_and_lbe_ids_distinct() -> None:
-    event = _event(
-        ModelEventType.TOOL_CALL_STARTED,
-        provider_request_id="req-provider-1",
-        provider_item_id="item-provider-2",
-        provider_tool_call_id="tool-provider-3",
-        lbe_call_id="lbe-4",
-    )
-
-    assert event.provider_request_id == "req-provider-1"
-    assert event.provider_item_id == "item-provider-2"
-    assert event.provider_tool_call_id == "tool-provider-3"
-    assert event.lbe_call_id == "lbe-4"
+def test_message_delta_preserves_provider_identity_without_runtime_receipt_identity() -> None:
+    event = _event()
+    assert event.provider_request_id == "provider-request-1"
+    assert event.provider_tool_call_id is None
+    assert event.lbe_call_id is None
     assert not hasattr(event, "runtime_operation_id")
     assert not hasattr(event, "tool_receipt_id")
 
 
-def test_tool_result_continuation_requires_existing_runtime_evidence_identity() -> None:
-    result = ProviderToolResultContinuation(
-        provider_tool_call_id="tool-provider-3",
-        lbe_call_id="lbe-4",
-        runtime_operation_id="operation-5",
-        tool_receipt_id="receipt-6",
+def test_tool_completion_requires_distinct_provider_and_lbe_call_identity() -> None:
+    event = _event(
+        event_type=ModelEventType.TOOL_CALL_COMPLETED,
+        text=None,
+        provider_tool_call_id="provider-tool-1",
+        lbe_call_id="lbe-call-1",
         tool_name="workspace.read",
-        output={"text": "hello"},
+        tool_arguments={"path": "README.md"},
     )
-
-    assert result.runtime_operation_id == "operation-5"
-    assert result.tool_receipt_id == "receipt-6"
-
-    with pytest.raises(ValueError, match="tool_receipt_id"):
-        ProviderToolResultContinuation(
-            provider_tool_call_id="tool-provider-3",
-            lbe_call_id="lbe-4",
-            runtime_operation_id="operation-5",
-            tool_receipt_id="",
-            tool_name="workspace.read",
-            output=None,
-        )
+    assert event.provider_tool_call_id == "provider-tool-1"
+    assert event.lbe_call_id == "lbe-call-1"
 
 
-def test_provider_turn_request_projects_tool_schema_without_authority() -> None:
-    tool = ProviderToolDefinition(
-        name="workspace.read",
-        description="Read one workspace-relative file.",
-        input_schema={
-            "type": "object",
-            "properties": {"path": {"type": "string"}},
-            "required": ["path"],
-            "additionalProperties": False,
-        },
-    )
-    request = ProviderTurnRequest(
-        provider_id="anthropic",
-        model_id="claude-model",
-        protocol_family=ProviderProtocolFamily.ANTHROPIC_MESSAGES,
-        system_prompt="Use only the projected governed tools when needed.",
-        messages=({"role": "user", "content": "inspect this"},),
-        tool_definitions=(tool,),
-    )
-
-    assert request.tool_definitions == (tool,)
-    assert not hasattr(request, "workspace_root")
-    assert not hasattr(request, "permission")
-    assert not hasattr(request, "authorization")
-    assert not hasattr(request, "tool_dispatcher")
-
-
-def test_usage_event_rejects_fabricated_or_invalid_counts() -> None:
-    event = _event(ModelEventType.USAGE_UPDATED, usage={"input_tokens": 10, "output_tokens": 4})
-    assert event.usage == {"input_tokens": 10, "output_tokens": 4}
-
-    with pytest.raises(ValueError, match="non-negative integers"):
-        _event(ModelEventType.USAGE_UPDATED, usage={"input_tokens": -1})
-
-
-def test_error_event_requires_provider_error_code() -> None:
+def test_invalid_normalized_event_fails_closed() -> None:
+    with pytest.raises(ValueError, match="text"):
+        _event(event_type=ModelEventType.REASONING_SUMMARY_DELTA, text="")
+    with pytest.raises(ValueError, match="provider_tool_call_id"):
+        _event(event_type=ModelEventType.TOOL_CALL_STARTED, text=None, lbe_call_id="lbe-call-1")
     with pytest.raises(ValueError, match="error_code"):
-        _event(ModelEventType.ERROR)
-
-    event = _event(ModelEventType.ERROR, error_code="RATE_LIMITED", text="provider rejected request")
-    assert event.error_code == "RATE_LIMITED"
-
-
-def test_professional_adapter_protocol_exposes_only_provider_io_contract() -> None:
-    method_names = {
-        name
-        for name, value in ProfessionalProviderAdapter.__dict__.items()
-        if callable(value) and not name.startswith("_")
-    }
-    assert method_names == {"stream_turn", "continue_with_tool_result", "cancel"}
+        _event(event_type=ModelEventType.ERROR, text=None)
+    with pytest.raises(ValueError, match="usage"):
+        _event(event_type=ModelEventType.USAGE_UPDATED, text=None)

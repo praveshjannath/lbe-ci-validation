@@ -9,7 +9,6 @@ from lbe_guard_inspector.provider_registry import (
     ProviderRegistry,
     default_provider_registry,
 )
-from lbe_guard_inspector.first_party_reasoning_provider import AnthropicReasoningBackend, GeminiReasoningBackend
 from lbe_guard_inspector.reasoning_contracts import ExplanationResult, ReasoningPlan
 from lbe_guard_inspector.reasoning_provider import OpenAICompatibleReasoningBackend, ProviderConfig
 from lbe_guard_inspector.reasoning_runtime import (
@@ -108,45 +107,15 @@ def test_provider_capabilities_validate_context_limit():
         ProviderCapabilities(context_limit=0)
 
 
-def test_default_registry_exposes_all_builtin_provider_ids():
+def test_default_registry_exposes_existing_openai_compatible_backend():
     registry = default_provider_registry()
     handle = registry.build(provider_id="openai-compatible", config=config())
 
-    assert registry.provider_ids() == ("anthropic", "gemini", "openai", "openai-compatible")
+    assert registry.provider_ids() == ("openai-compatible",)
     assert handle.descriptor.provider_id == "openai-compatible"
     assert handle.descriptor.model_id == "model-a"
     assert handle.descriptor.capabilities.structured_output is True
     assert isinstance(handle.backend, OpenAICompatibleReasoningBackend)
-
-
-@pytest.mark.parametrize(
-    ("provider_id", "backend_type"),
-    [
-        ("openai", OpenAICompatibleReasoningBackend),
-        ("anthropic", AnthropicReasoningBackend),
-        ("gemini", GeminiReasoningBackend),
-    ],
-)
-def test_default_registry_builds_first_party_backends(provider_id, backend_type):
-    handle = default_provider_registry().build(
-        provider_id=provider_id,
-        config=ProviderConfig(
-            endpoint="https://provider.example/v1/messages",
-            model="model-a",
-            timeout_seconds=30,
-            api_key="test-key",
-        ),
-    )
-
-    assert handle.descriptor.provider_id == provider_id
-    assert handle.descriptor.capabilities.structured_output is True
-    assert isinstance(handle.backend, backend_type)
-
-
-@pytest.mark.parametrize("provider_id", ["openai", "anthropic", "gemini"])
-def test_first_party_registry_adapters_require_explicit_api_key(provider_id):
-    with pytest.raises(ValueError, match="requires a non-empty api_key"):
-        default_provider_registry().build(provider_id=provider_id, config=config())
 
 
 def test_generic_composition_uses_registered_backend_without_invoking_it():

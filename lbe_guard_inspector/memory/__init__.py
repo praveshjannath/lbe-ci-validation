@@ -27,36 +27,20 @@ from .models import (
     TaskStatus,
     ValidationStatus,
 )
-from .operational_history import (
-    ItemStatus,
-    OperationalEvent,
-    OperationalHistoryError,
-    OperationalItem,
-    OperationalTurn,
-    SessionOperationalHistory,
-    TurnStatus,
-)
 from .promoter import CandidateClaim, MemoryPromoter
 from .store import WorkspaceMemoryStore
 
 __all__ = [
     "CandidateClaim",
     "CompactionCheckpoint",
-    "ItemStatus",
     "MemoryPromoter",
     "MemoryRecord",
     "MemoryType",
-    "OperationalEvent",
-    "OperationalHistoryError",
-    "OperationalItem",
-    "OperationalTurn",
     "SessionMemoryAdapter",
-    "SessionOperationalHistory",
     "SessionState",
     "SourceType",
     "TaskState",
     "TaskStatus",
-    "TurnStatus",
     "ValidationStatus",
     "WorkspaceMemoryStore",
     "build_context_packet",

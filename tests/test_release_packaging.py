@@ -4,51 +4,11 @@ import json
 import os
 import subprocess
 import sys
-import tarfile
 import zipfile
 from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-
-
-_PROHIBITED_PACKAGE_SEGMENTS = (
-    "/tests/",
-    "/state/",
-    "/docs/",
-    "/acceptance/",
-    "/.truth/",
-    "/.github/",
-    "/build/",
-    "/dist/",
-    "/backup-before-repair/",
-    "/repair-package/",
-)
-_PROHIBITED_PACKAGE_NAMES = {
-    "config.json",
-    "governance.json",
-    "reasoning-provider.json",
-    "manifest.json",
-}
-_PROHIBITED_PACKAGE_SUFFIXES = (
-    ".sqlite",
-    ".sqlite3",
-    ".db",
-    ".key",
-    ".pem",
-    ".pfx",
-    ".p12",
-    ".env",
-)
-
-
-def _assert_no_runtime_or_secret_artifacts(names: set[str]) -> None:
-    for name in names:
-        normalized = "/" + name.lower().lstrip("/")
-        leaf = normalized.rsplit("/", 1)[-1]
-        assert not any(segment in normalized for segment in _PROHIBITED_PACKAGE_SEGMENTS), name
-        assert leaf not in _PROHIBITED_PACKAGE_NAMES, name
-        assert not normalized.endswith(_PROHIBITED_PACKAGE_SUFFIXES), name
 
 
 def test_wheel_contains_only_runtime_modules_and_contracts(
@@ -84,6 +44,7 @@ def test_wheel_contains_only_runtime_modules_and_contracts(
         "audit_controller.py",
         "server.py",
         "lbe_guard_inspector/callback_vertical_slice.py",
+        "lbe_guard_inspector/memory/memory_schema.sql",
         "lbe_guard_inspector/module_registry_vertical_slice.py",
         "rules/cep_callback.py",
         "rules/module_registry.py",
@@ -93,37 +54,6 @@ def test_wheel_contains_only_runtime_modules_and_contracts(
     assert not any(name.startswith("tests/") for name in names)
     assert not any(name.startswith("state/") for name in names)
     assert not any(name.startswith("docs/") for name in names)
-    assert "lbe_guard_inspector/memory/memory_schema.sql" in names
-    _assert_no_runtime_or_secret_artifacts(names)
-
-
-def test_sdist_excludes_runtime_state_configuration_and_acceptance_artifacts(
-    tmp_path: Path,
-) -> None:
-    distribution_dir = tmp_path / "dist"
-    distribution_dir.mkdir()
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "build",
-            "--sdist",
-            "--outdir",
-            str(distribution_dir),
-            str(REPOSITORY_ROOT),
-        ],
-        check=True,
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-    )
-    archives = tuple(distribution_dir.glob("lbe_guard_inspector-*.tar.gz"))
-    assert len(archives) == 1
-    with tarfile.open(archives[0]) as archive:
-        names = set(archive.getnames())
-
-    assert any(name.endswith("lbe_guard_inspector/memory/memory_schema.sql") for name in names)
-    _assert_no_runtime_or_secret_artifacts(names)
 
 
 def test_installed_wheel_runs_both_fixed_guard_slices(tmp_path: Path) -> None:

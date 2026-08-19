@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "active_plan": "docs/acceptance/PUBLICATION_VERSION_2_0_3_PREPARATION_GATE.md",
+  "active_phase": "PUBLICATION_VERSION_PREPARATION",
+  "active_slice": "SET_AND_VALIDATE_CANONICAL_VERSION_2_0_3",
+  "status": "OPEN",
+  "implementation_allowed": true,
+  "architecture_changes_allowed": false,
+  "next_phase_locked": true,
+  "required_status_for_advance": "PASS",
+  "blocking_statuses": [
+    "FAIL",
+    "UNVERIFIED",
+    "DOCUMENT_CONFLICT",
+    "MISSING_EVIDENCE",
+    "PYPI_VERSION_ALREADY_EXISTS",
+    "TRUSTED_PUBLISHING_EXECUTION_FAILURE",
+    "TRACKED_SOURCE_DIRTY",
+    "PACKAGE_VERSION_CONFLICT"
+  ],
+  "rules": {
+    "one_active_slice": true,
+    "no_next_phase_without_pass": true,
+    "no_parallel_architecture": true,
+    "checkpoint_required_before_advance": true,
+    "fail_closed": true,
+    "existing_owner_audit_required": true,
+    "reuse_evaluation_required": true,
+    "architecture_change_requires_user_authorization": true,
+    "publication_requires_explicit_user_authorization": true
+  },
+  "accepted_baseline": {
+    "R3": "PROVEN_COMPLETE",
+    "R4": "PROVEN_COMPLETE",
+    "R5": "PROVEN_COMPLETE",
+    "R6A": "PROVEN_COMPLETE",
+    "R6B": "PROVEN_COMPLETE",
+    "R6C": "PROVEN_COMPLETE",
+    "R6D": "PROVEN_COMPLETE",
+    "R6E": "PROVEN_COMPLETE",
+    "R6F": "PROVEN_COMPLETE",
+    "CLI": "PROVEN_COMPLETE",
+    "R7_INSTALLED_END_TO_END_ACCEPTANCE": "PASS",
+    "RELEASE_PACKAGE_CONTRACT_REPAIR": "PASS",
+    "RELEASE_PACKAGE_READINESS_ACCEPTANCE": "PASS",
+    "PUBLICATION_PRECHECK": "PASS"
+  },
+  "release_package_readiness": {
+    "status": "PASS",
+    "decisive_hash": "B0A7F67A78B8DB9DC7BB7A78D0B40F529E1DFFC44143BFE51F6E461407E6CFCA",
+    "previous_canonical_version": "0.2.0",
+    "version_authority": "pyproject.toml",
+    "workflow_contract": "PASS",
+    "manual_only_publish_trigger": true,
+    "package_proof_still_applicable_before_version_change": true,
+    "packaging_tests": "PASS",
+    "publish_allowed": false
+  },
+  "publication_precheck": {
+    "status": "PASS",
+    "decisive_hash": "CB87655106DEB0D947FD03546929CB9B6B0432A2707539C5A3D2B16C8B962D4D",
+    "distribution": "lbe-guard-inspector",
+    "previous_canonical_version": "0.2.0",
+    "pypi_project_present": true,
+    "pypi_existing_versions": ["2.0.1", "2.0.2"],
+    "github_pypi_environment": "PASS",
+    "workflow_oidc_contract": "PASS",
+    "trusted_publisher_binding": "PROVEN_BY_USER_SUPPLIED_PYPI_CONFIGURATION",
+    "trusted_publisher_repository": "Letterblack0306/LBE_Presistent_Agent_wall",
+    "trusted_publisher_workflow": "publish-python-runtime.yml",
+    "trusted_publisher_environment": "pypi",
+    "publish_allowed": false
+  },
+  "version_preparation": {
+    "status": "OPEN",
+    "distribution": "lbe-guard-inspector",
+    "from_version": "0.2.0",
+    "target_version": "2.0.3",
+    "authorization": "EXPLICIT_USER_AUTHORIZATION",
+    "allowed_paths": [
+      "pyproject.toml",
+      ".lbe/governance/implementation-gates.json",
+      "docs/acceptance/PUBLICATION_VERSION_2_0_3_PREPARATION_GATE.md",
+      "docs/acceptance/PUBLICATION_EXECUTION_AUTHORIZATION_GATE.md"
+    ],
+    "publish_allowed": false
+  },
+  "publication_execution": {
+    "status": "AUTHORIZED_PENDING_VERSION_PREPARATION_AND_VALIDATION",
+    "repository": "Letterblack0306/LBE_Presistent_Agent_wall",
+    "ref": "main",
+    "distribution": "lbe-guard-inspector",
+    "version": "2.0.3",
+    "workflow": ".github/workflows/publish-python-runtime.yml",
+    "environment": "pypi",
+    "publish_allowed": false,
+    "authorization": "User explicitly authorized publication and specified version 2.0.3"
+  },
+  "release_progression": {
+    "user_authorized_release_path": true,
+    "publish_allowed_now": false,
+    "remaining_prerequisites": [
+      "set canonical pyproject.toml version to 2.0.3",
+      "validate exact 2.0.3 wheel and installed runtime",
+      "prove PyPI 2.0.3 is absent immediately before dispatch",
+      "successful live trusted-publishing workflow execution",
+      "post-publish PyPI verification"
+    ]
+  },
+  "forbidden": [
+    "publishing before the 2.0.3 artifact is validated",
+    "publishing any version other than 2.0.3",
+    "creating tags or GitHub releases without separate authorization",
+    "adding an npm publication path",
+    "API-token fallback without a separate authorized security decision",
+    "blind retry after publication failure",
+    "runtime or architecture changes outside the bounded version-preparation scope"
+  ]
+}

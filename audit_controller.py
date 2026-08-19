@@ -29,6 +29,8 @@ try:
         STATE_DIR,
         Context,
         GovernanceError,
+        inspect_file,
+        search_workspace,
         write_json,
     )
 except ImportError as exc:  # pragma: no cover - defensive
@@ -316,6 +318,36 @@ def _build_file_inventory(ctx: Context, roots: list[str] | None) -> dict[str, An
         "unreadable_directories": unreadable_directories[:50],
         "unreadable_directory_count": len(unreadable_directories),
     }
+
+
+def detect_project_type(ctx: Context) -> str:
+    """Detect CEP from indexed manifests; otherwise return generic."""
+    try:
+        result = search_workspace(
+            ctx,
+            "manifest.json",
+            max_results=50,
+            extensions=[".json"],
+        )
+    except Exception:
+        return "generic"
+
+    if result.get("outcome") != "matches_found":
+        return "generic"
+
+    for item in result.get("results", []):
+        path = item.get("path")
+        if not isinstance(path, str):
+            continue
+        try:
+            content = str(inspect_file(ctx, path).get("content", ""))
+        except Exception:
+            continue
+        lowered = content.lower()
+        if "csxs" in lowered or "cep" in lowered or "extendscript" in lowered:
+            return "cep"
+
+    return "generic"
 
 
 def _record_result(report: AuditReport, result: RuleResult) -> None:

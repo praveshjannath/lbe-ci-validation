@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +9,6 @@ import pytest
 from lbe_guard_inspector.agent_integration import AgentMode
 from lbe_guard_inspector.cli import main
 from lbe_guard_inspector.memory import TaskStatus
-from lbe_guard_inspector.provider_capabilities import discover_provider_model_capabilities
 from lbe_guard_inspector.provider_health import ProviderHealthResult
 from lbe_guard_inspector.provider_registry import ProviderCapabilities
 from lbe_guard_inspector.reasoning_contracts import LBEResponse
@@ -61,79 +59,6 @@ def _session(
     return workspace, database
 
 
-def _git_workspace(workspace: Path) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=workspace, check=True)
-    subprocess.run(["git", "add", "."], cwd=workspace, check=True)
-    subprocess.run(["git", "commit", "-qm", "initial"], cwd=workspace, check=True)
-
-
-def test_session_checkpoint_records_live_file_fact_and_resume_invalidates_it(
-    tmp_path: Path, capsys
-) -> None:
-    workspace, database = _session(
-        tmp_path,
-        mode="coding",
-        permission="write_allowed",
-        runtime_policy="permissive",
-    )
-    tracked = workspace / "README.md"
-    tracked.write_text("before\n", encoding="utf-8")
-    _git_workspace(workspace)
-    runtime = SessionMemoryRuntimeBridge(
-        database_path=database,
-        project_workspace_id="project-1",
-        workspace_root=workspace,
-        session_id="session-1",
-    )
-    runtime.record_task_status(task_id="task-1", status=TaskStatus.RUNNING)
-    compaction = tmp_path / "compaction.json"
-    compaction.write_text(
-        json.dumps(
-            {
-                "source_message_count": 1,
-                "source_prefix_hash": "sha256:" + "a" * 64,
-                "source_last_message_key": "id:checkpoint-1",
-                "messages": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    code = main([
-        "session", "checkpoint",
-        "--database", str(database),
-        "--session-id", "session-1",
-        "--task-id", "task-1",
-        "--track-file", "README.md",
-        "--compaction", str(compaction),
-        "--constraint", "preserve current workspace evidence",
-    ])
-    checkpoint = _json_output(capsys)
-    assert code == 0
-    assert checkpoint["action"] == "session.checkpoint"
-    assert checkpoint["checkpoint_id"]
-    assert len(checkpoint["tracked_file_memory_ids"]) == 1
-
-    tracked.write_text("after\n", encoding="utf-8")
-    subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
-    subprocess.run(["git", "commit", "-qm", "external change"], cwd=workspace, check=True)
-
-    code = main([
-        "session", "continue",
-        "--database", str(database),
-        "--session-id", "session-1",
-        "--task-id", "task-1",
-    ])
-    resumed = _json_output(capsys)
-    assert code == 0
-    assert resumed["context"]["checkpoint"]["checkpoint_id"] == checkpoint["checkpoint_id"]
-    assert resumed["context"]["checkpoint_revalidation"]["checks"]["head"] == "MISMATCH"
-    assert resumed["context"]["checkpoint_revalidation"]["status"] == "INELIGIBLE"
-    assert resumed["context"]["verified_facts"] == []
-
-
 def test_provider_check_delegates_to_provider_health_owner(tmp_path: Path, capsys, monkeypatch) -> None:
     config = _provider_config(tmp_path)
     calls = []
@@ -145,11 +70,6 @@ def test_provider_check_delegates_to_provider_health_owner(tmp_path: Path, capsy
             model_id="model-a",
             status="READY",
             capabilities=ProviderCapabilities(structured_output=True),
-            professional_capabilities=discover_provider_model_capabilities(
-                provider_id="openai-compatible",
-                model_id="model-a",
-                endpoint="http://provider/v1/chat/completions",
-            ),
         )
 
     monkeypatch.setattr(

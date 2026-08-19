@@ -1,1143 +1,544 @@
 # LBE Persistent Agent — Canonical Implementation Plan
 
-Updated: 2026-08-10
-Status: Active canonical roadmap
+Updated: 2026-08-17
+Status: Active canonical roadmap — R7 installed end-to-end acceptance failed on installed coding composition; repair investigation required before any implementation or release progression
+## Authority reconciliation (READ FIRST)
 
-This document is the implementation sequence for `Letterblack0306/LBE_Presistent_Agent_wall`.
+Current machine-gate authority — `.lbe/governance/implementation-gates.json` and
+`docs/acceptance/R7_INSTALLED_END_TO_END_ACCEPTANCE_GATE.md`:
 
-For architecture rationale and provider/CLI boundaries, also read:
+```text
+phase: R7_INSTALLED_END_TO_END_ACCEPTANCE
+slice: OBSERVABLE_13_INSTALLED_RUNTIME_REGRESSION
+status: OPEN
+observables 1-12: PASS (observable 3 PASS_AFTER_REPAIR)
+observable 13: OPEN (current active slice)
+implementation_allowed: false
+architecture_changes_allowed: false
+next_phase_locked: true
+base_sha: 69c6ae764bc217cd5795ddf8a972658223a681a0
+HEAD: 24d6e5950b912c0889396e95d307e41bdf05d06f
+```
 
-- `docs/design/CLI_CONTROL_PLANE_PROVIDER_BOUNDARY.md`
-- `docs/design/LLM_REASONING_LAYER_ROADMAP.md`
-- `docs/VALIDATED_WORKSPACE_MEMORY.md`
-- `docs/CURRENT_STATUS.md`
+The status lines in the body below that describe "R7 FAIL / repair not yet activated" are
+**historical records** of the earlier observable-3 installed coding-composition failure and
+its repair investigation. They are not current machine-gate state. Live Git/runtime/validation
+evidence and the machine gate outrank them.
 
-When this plan and live repository evidence disagree, current source, current Git state, runtime evidence, and current validation win. Update this plan rather than silently creating a competing roadmap.
+**Architecture correction — read before extending the LBE wall:** the reasoning controller
+became the agent. See `docs/design/AGENT_AGENCY_LBE_AUTHORITY_SEPARATION.md` and section 15.
 
----
+
 
 ## 1. Product goal
 
-Build a persistent, provider-neutral LBE agent runtime where:
+Build a persistent, provider-neutral LBE runtime where the provider reasons while LBE owns workspace/session identity, context/evidence authority, mode/policy, authorization, governed execution, receipts, validation/completion truth, and persistent state.
+
+## 2. Non-negotiable invariants
+
+- provider/model changes must not change LBE authority;
+- current workspace/runtime evidence outranks memory/reference history;
+- only registered governed tools may execute;
+- operation IDs/receipts prevent unintended duplicate execution;
+- provider continuation consumes receipts but owns no execution authority;
+- terminal completion belongs to deterministic LBE validation, not provider/model prose;
+- CLI/TUI/API surfaces are control/projection layers, never duplicate authority owners;
+- installed behavior must compose the same authorities proven in source/runtime acceptance;
+- no second session/context/retrieval/mode/authorization/tool/receipt/completion/continuation/recovery owner;
+- lower-layer acceptance does not imply end-to-end installed composition;
+- a failed harness invocation is not a product defect; a product defect requires evidence from the intended runtime boundary.
+
+## 3. Current roadmap state
 
 ```text
-user / external agent
-        |
-        v
-LBE CLI / API
-        |
-        v
-persistent session controller
-        |
-        +-- workspace identity
-        +-- execution mode
-        +-- active workspace policy
-        +-- permissions
-        +-- guard/profile selection
-        +-- evidence requirements
-        +-- validation/completion requirements
-        |
-        v
-provider adapter
-        |
-        +-- OpenAI-compatible providers
-        +-- Claude/provider APIs
-        +-- LM Studio
-        +-- Ollama
-        +-- future providers
-        |
-        v
-reasoning layer
-        |
-        v
-LBE tools / guards / validation / governance
-        |
-        v
-current workspace
+R3  PROVEN_COMPLETE
+R4  PROVEN_COMPLETE
+R5  PROVEN_COMPLETE
+R6A PROVEN_COMPLETE
+R6B PROVEN_COMPLETE
+R6C PROVEN_COMPLETE
+R6D PROVEN_COMPLETE
+R6E PROVEN_COMPLETE
+R6F PROVEN_COMPLETE
+CLI PROVEN_COMPLETE
+R7  FAIL — INSTALLED NORMAL-PATH CODING COMPOSITION GAP
+repair investigation NOT YET ACTIVATED
+release/package readiness BLOCKED_BY_R7
 ```
 
-The provider reasons. LBE owns the workspace contract.
-
-The product must support two primary user-facing operating paths:
-
-1. **Coding** — governed modification and validation inside authority already granted by the user.
-2. **Audit / investigation** — evidence-first inspection without workspace mutation.
-
-Additional surfaces such as a TUI are optional views over the same runtime state. They must not become parallel controllers.
-
----
-
-## 2. Non-negotiable architecture invariants
-
-### 2.1 LBE remains stable when the model changes
-
-Changing the provider or model must not change:
-
-- workspace identity;
-- active rules and profiles;
-- permissions;
-- deterministic guard semantics;
-- evidence authority;
-- validation requirements;
-- completion requirements;
-- persistent session/task state.
-
-Provider changes affect reasoning implementation only.
-
-### 2.2 CLI is a control surface, not the source of authority
-
-The CLI owns user/runtime interaction. LBE Core and the persistent runtime own policy enforcement and execution authority.
-
-Do not implement:
+Current active gate remains the failed R7 acceptance gate:
 
 ```text
-CLI -> model -> raw unrestricted tools
+phase: R7_INSTALLED_END_TO_END_ACCEPTANCE
+slice: PROVE_INSTALLED_PERSISTENT_AGENT_NORMAL_PATH_OVER_ACCEPTED_AUTHORITIES
+status: FAIL
+implementation_allowed: false
+architecture_changes_allowed: false
+next_phase_locked: true
+base_sha: 69c6ae764bc217cd5795ddf8a972658223a681a0
+activation_sha: 401a4f184fcbeae5ff6e4d58be139515b9861ed2
+failure_record_head: 66e46b5886d2e71d0542ce782179722ae476d3f6
+required_evidence_level: USER_VISIBLE_RUNTIME
+release_path_authorized: true
+publish_allowed_now: false
 ```
 
-Required boundary:
+## 4. Accepted phases and what they do — and do not — prove
+
+R3 through R6F and CLI normal-path acceptance remain `PROVEN_COMPLETE` for their bounded contracts.
+
+They establish accepted constituent authorities:
 
 ```text
-CLI
- -> session controller
- -> LBE policy/capability resolution
- -> provider reasoning
- -> governed tools
- -> current workspace
-```
-
-### 2.3 Modes are execution contracts, not model personalities
-
-Do not create separate permanent "coding LLM", "audit LLM", or "rule-learning LLM" authorities.
-
-Use one provider abstraction with mode-specific:
-
-- tool permissions;
-- write authority;
-- evidence requirements;
-- guard requirements;
-- validation requirements;
-- completion rules.
-
-### 2.4 Rules are injected and enforced, not passively learned
-
-Agents do not become reliable because a model saw a rule previously.
-
-Relevant rules, guards, validated patterns, constraints, and known risks are loaded into the active session contract when applicable.
-
-Permanent policy changes must follow the configured governance path.
-
-### 2.5 Existing authorization must not become repeated confirmation
-
-The runtime must distinguish authorization from per-action confirmation.
-
-If user/session/workspace settings already authorize a class of action, such as applying an existing approved rule, editing allowed source files, or running approved validation, the coding runtime may continue without asking again for every matching action.
-
-Escalation is required only when an operation exceeds active authority, for example:
-
-- path or workspace scope expansion;
-- capability class not enabled by policy;
-- destructive action outside delegated authority;
-- persistent rule/profile creation or widening not already delegated;
-- unresolved intent or scope conflict.
-
-### 2.6 Workspace truth remains live
-
-Authority order remains:
-
-```text
-current validation
-    > current workspace/Git/runtime evidence
-    > active workspace policy
-    > verified memory/checkpoints
-    > verified historical repairs
-    > curated reference patterns
-    > unverified history
-    > model inference
-```
-
-Persistent memory must never replace live inspection.
-
----
-
-## 3. Existing foundation to preserve
-
-The following capabilities are foundation, not targets for redesign:
-
-- reference corpus retrieval and evidence classification;
-- target workspace resolution and project-scoped identity;
-- typed evidence packages and guard requests/results;
-- deterministic guard execution;
-- validation and verdict ownership separation;
-- reasoning retrieval/query/evidence/guard/investigation/explanation planning;
-- governed rule proposal and apply boundary;
-- validated project-scoped memory;
-- `WorkspaceMemoryStore`;
-- `SessionMemoryRuntimeBridge`;
-- Module Registry / runtime-map concepts;
-- Authority Ownership inspection;
-- runtime-neutral invocation concepts.
-
-New work must reuse existing owners rather than create parallel substitutes.
-
----
-
-# 4. Current gate — finish R2 before expanding runtime
-
-## R2 — Canonical session/task lifecycle persistence
-
-Current PR: `#28`
-
-Current branch:
-
-```text
-feat/persistent-runtime-session-task-state
-```
-
-Recorded PR head:
-
-```text
-124347e6504140682b744c6cafbe98a55fd635f5
-```
-
-Current R2 scope:
-
-- canonical `TaskStatus`;
-- persisted `session_id`;
-- persisted `task_id`;
-- project/workspace identity;
-- status;
-- outcome;
-- timestamps;
-- existing `WorkspaceMemoryStore` reused;
-- existing `SessionMemoryRuntimeBridge` reused.
-
-Explicitly excluded from R2:
-
-- resume execution;
-- retry/recovery;
-- checkpoint expansion;
-- reasoning ownership changes;
-- validation ownership changes;
-- tool orchestration;
-- CLI/provider implementation.
-
-### R2 merge gate
-
-Before R3 begins:
-
-1. update/reconcile PR #28 against current `main` without expanding scope;
-2. run the full repository suite on the exact final R2 head;
-3. record the full-suite evidence;
-4. run focused session-runtime tests;
-5. run `git diff --check`;
-6. confirm changed files remain inside R2 scope;
-7. merge only after the exact head is proven.
-
-Do not use an older reported test count as proof for a newer head.
-
----
-
-# 5. R3 — Persistent runtime → existing reasoning boundary
-
-## Goal
-
-Make the existing runtime owner invoke the existing reasoning controller and persist the lifecycle outcome.
-
-Required path:
-
-```text
-SessionMemoryRuntimeBridge
-        |
-        v
-construct existing LBERequest
-        |
-        v
-LBERequestController.run()
-        |
-        v
-existing LBEResponse
-        |
-        v
-persist task/session outcome
-```
-
-## Requirements
-
-- no second reasoning controller;
-- no second session lifecycle owner;
-- no reasoning knowledge of persistence internals;
-- no new verdict authority;
-- no tool execution yet;
-- no retry/recovery yet;
-- preserve project/workspace identity across request and response;
-- persist success/failure/interruption outcomes using existing task-state storage.
-
-## Exit proof
-
-- one session can create a task;
-- runtime calls the existing reasoning boundary;
-- response is returned unchanged except for runtime envelope metadata;
-- task lifecycle outcome is persisted;
-- reasoning remains independently testable;
-- full suite passes.
-
----
-
-# 6. R4 — Checkpoint, resume, and rehydration
-
-## Goal
-
-Allow a persistent session to stop and continue without treating remembered state as live workspace truth.
-
-## Required session data
-
-A persisted session contract must carry at least:
-
-```text
-session_id
-task_id
-project_workspace_id
-canonical_workspace_root
-mode
-provider_id/provider_model
-active_profile_id
-permission_policy_id
-evidence_policy_id
-TaskStatus
-last_outcome
-checkpoint identity
-created_at
-updated_at
-```
-
-Provider credentials or raw secrets must not be persisted in session state.
-
-## Resume flow
-
-```text
-resume requested
-      |
-      v
-resolve canonical workspace
-      |
-      v
-inspect current Git/runtime/workspace state
-      |
-      v
-load persisted session + verified memory
-      |
-      v
-invalidate stale source-backed claims
-      |
-      v
-rebuild bounded context packet
-      |
-      v
-continue through current provider adapter
-```
-
-## Revalidation requirements
-
-Before continuing a resumed task:
-
-- re-resolve workspace identity;
-- compare relevant Git branch/HEAD state;
-- revalidate required source hashes;
-- mark stale memory stale rather than silently reuse it;
-- preserve active task constraints unless explicitly superseded;
-- treat compaction summaries as history only.
-
-## Exit proof
-
-Controlled end-to-end proof:
-
-1. start a session;
-2. establish a validated workspace fact;
-3. persist active task constraint;
-4. checkpoint/compact;
-5. change the underlying source;
-6. restart/resume;
-7. old source fact becomes stale;
-8. active constraint survives;
-9. current workspace/Git state wins;
-10. task continues without trusting summary text as proof.
-
----
-
-# 7. R5 — Bounded classified retry and recovery
-
-## Goal
-
-Recover from transient or classified failures without turning the agent into an uncontrolled loop.
-
-## Failure classes
-
-At minimum distinguish:
-
-- provider/inference failure;
-- timeout;
-- temporary tool failure;
-- deterministic validation failure;
-- permission denial;
-- stale workspace state;
-- specification/scope conflict;
-- missing dependency/resource;
-- cancellation/interruption.
-
-## Retry contract
-
-Retry is allowed only when policy explicitly declares:
-
-- retryable failure class;
-- maximum attempts;
-- delay/backoff if applicable;
-- idempotency expectation;
-- evidence required between attempts;
-- terminal stop condition.
-
-Do not retry deterministic policy denial, scope conflict, or known-invalid input as though it were transient.
-
-## Exit proof
-
-- transient provider/tool failure can recover within policy;
-- deterministic failure does not loop;
-- retry count persists across session state where required;
-- duplicate writes are prevented;
-- cancellation stops the loop cleanly;
-- final outcome records exact recovery evidence.
-
----
-
-# 8. R6A — Provider abstraction layer
-
-## Goal
-
-Make the reasoning provider user-selectable without moving authority out of LBE.
-
-## Provider interface
-
-Define one provider contract with capabilities such as:
-
-```text
-provider_id
-model_id
-health_check()
-capabilities()
-generate()/complete()
-stream()              optional capability
-tool_call_support     capability metadata
-context_limit         capability metadata
-```
-
-Exact method names are implementation details; the stable contract is provider neutrality.
-
-## Initial provider targets
-
-Recommended first adapters:
-
-1. OpenAI-compatible HTTP provider;
-2. LM Studio through OpenAI-compatible local endpoint;
-3. Ollama;
-4. Anthropic/Claude adapter when its API-specific mapping is needed.
-
-Do not hardcode workspace policy into provider adapters.
-
-## Adapter responsibilities
-
-Provider adapters may translate:
-
-- authentication/configuration;
-- request/response formats;
-- streaming format;
-- tool-call serialization;
-- context-window/capability metadata;
-- health/model discovery.
-
-They may not reinterpret:
-
-- workspace permissions;
-- guard verdicts;
-- evidence authority;
-- completion truth;
-- persistent rules.
-
-## Provider switching proof
-
-Within the same workspace/session contract:
-
-```text
-provider A -> reasoning request -> response
-provider B -> same logical reasoning request -> response
-```
-
-The switch must preserve:
-
-- workspace identity;
-- policy;
-- permissions;
-- guards;
-- evidence package semantics;
-- task lifecycle.
-
----
-
-# 9. R6B — Mode policy engine
-
-## Goal
-
-Represent coding, audit, and investigation as typed runtime policy rather than prompt-only behavior.
-
-## Coding mode
-
-Purpose: build, fix, modify, and validate within granted authority.
-
-Potential capabilities when enabled by active policy:
-
-- inspect workspace;
-- search/retrieve evidence;
-- edit approved paths;
-- create bounded patches;
-- run approved commands/tests/builds;
-- apply existing approved workspace rules;
-- invoke relevant guards;
-- validate before completion.
-
-Coding mode does not automatically mean unrestricted write authority.
-
-## Audit mode
-
-Purpose: determine current reality.
-
-Default characteristics:
-
-- read-only;
-- current workspace evidence required for project-specific claims;
-- deterministic guard results;
-- strict validation requirements;
-- no repair/edit path;
-- explanations cannot alter verdicts.
-
-## Investigation mode
-
-Purpose: diagnose an unknown failure or expand from a known failure.
-
-Characteristics:
-
-- starts from error/evidence/guard result/runtime event;
-- may search semantically and trace callers/handlers/dependencies;
-- remains project-scoped by default;
-- produces diagnosis/evidence;
-- no mutation unless explicitly operating under coding authority.
-
-## Exit proof
-
-The same provider can run under each mode and receives different allowed capabilities from LBE policy, not from separate model identities.
-
----
-
-# 10. R6C — Permission and authorization resolver
-
-## Goal
-
-Turn user-configured authority into deterministic runtime decisions and remove unnecessary repeated prompts.
-
-## Inputs
-
-```text
-workspace identity
-session mode
-user settings
-workspace profile
-requested capability/action
-path/scope
-risk class
-persistent-policy impact
-```
-
-## Output
-
-```text
-ALLOW
-DENY
-ESCALATE
-```
-
-with reason and policy provenance.
-
-## Rules
-
-### ALLOW
-
-Use when the active policy already grants the exact operation class and scope.
-
-Examples:
-
-- edit inside configured source scope;
-- run approved test command class;
-- apply an existing approved workspace rule;
-- execute allowed validation.
-
-### ESCALATE
-
-Use when additional user authority is genuinely required.
-
-Examples:
-
-- write outside configured scope;
-- destructive action not delegated;
-- new external/network capability not permitted;
-- creation/widening of persistent policy when not delegated;
-- unresolved conflict with active intent.
-
-### DENY
-
-Use when policy explicitly prohibits the action or it violates a hard safety/workspace boundary.
-
-## Important distinction
-
-```text
-existing approved rule + already delegated apply authority
-    -> may apply without another prompt
-
-new rule / wider policy / new authority class
-    -> follow policy-change authorization rules
-```
-
-## Exit proof
-
-- repeated allowed edits do not repeatedly ask permission;
-- out-of-scope action cannot bypass resolver;
-- policy provenance is recorded;
-- provider cannot self-upgrade its authority.
-
----
-
-# 11. R6D — Context assembly and guard/rule injection
-
-## Goal
-
-Build the exact bounded context needed for the current turn instead of dumping memory or workspace content into the model.
-
-## Context sources
-
-Potential packet sections:
-
-```text
-current session/task identity
-current mode
-provider capability summary
-active workspace identity
-active permissions
-current task/goal
-verified active constraints
-relevant workspace rules
-applicable guard metadata
-bounded indexed reference evidence
-current workspace evidence requested for reasoning
-recent validated failures/patterns
-checkpoint context
-missing/contradictory evidence
-```
-
-Evidence classes must remain distinguishable.
-
-## Rule selection behavior
-
-Do not inject every rule.
-
-Use:
-
-- workspace profile;
-- current project type;
-- task/failure domain;
-- guard applicability;
-- previous validated pattern triggers.
-
-A model may request additional evidence but cannot invent a guard or declare a rule applied when runtime did not apply it.
-
-## Exit proof
-
-- context is bounded and reproducible;
-- irrelevant rules are absent;
-- current workspace facts are not replaced by reference matches;
-- provider switch receives equivalent authoritative context;
-- reason/planning text cannot contaminate retrieval queries.
-
----
-
-# 12. R6E — Governed tool orchestration
-
-## Goal
-
-Allow coding mode to use real tools while LBE remains the authority boundary.
-
-## Tool lifecycle
-
-```text
-reasoning requests tool
-        |
-        v
-registered tool lookup
-        |
-        v
-permission resolver
-        |
-        v
-preconditions / workspace boundary
-        |
-        v
-execute
-        |
-        v
-capture structured evidence
-        |
-        v
-update task/runtime state
-        |
-        v
-validation when required
-```
-
-## Tool registry requirements
-
-Each executable capability must declare:
-
-- tool ID;
-- schema;
-- read/write class;
-- network behavior;
-- risk class;
-- timeout;
-- retry policy;
-- preconditions;
-- expected evidence;
-- failure modes.
-
-## Initial coding tool classes
-
-Implement only what is required by real workflows, for example:
-
-- workspace tree/read/search/hash;
-- controlled file patch/write;
-- approved command execution;
-- test/build/validation execution;
-- Git status/diff inspection;
-- optional governed commit/push only if later explicitly included by policy.
-
-Do not give models a generic unrestricted shell bypass around registered tool policy.
-
-## Exit proof
-
-- model requests cannot bypass the registry;
-- write scope is checked before mutation;
-- tool outputs become structured evidence;
-- duplicate operation identity is available for recovery/idempotency;
-- validation can bind to actual execution receipts.
-
----
-
-# 13. R6F — Completion and validation gate
-
-## Goal
-
-Prevent the coding runtime from converting a plausible model response into `DONE`.
-
-## Completion predicate
-
-Task completion must evaluate the claim actually being made.
-
-Possible evidence:
-
-- required source changes exist;
-- expected diff scope is satisfied;
-- targeted tests pass;
-- required full suite passes;
-- build/package validation passes;
-- current Git/workspace state is known;
-- relevant deterministic guards pass where required;
-- no unresolved required validation remains.
-
-Not every task requires every evidence type. The task contract defines the required proof.
-
-## Exit proof
-
-- model saying "done" is insufficient;
-- missing required validation keeps task incomplete;
-- failures are preserved as evidence;
-- successful completion stores a validated lifecycle outcome rather than model opinion.
-
----
-
-# 14. CLI implementation
-
-## Goal
-
-Expose the persistent runtime through one stable, automation-friendly interface.
-
-The CLI must remain thin: it parses user intent/configuration and invokes runtime services. It must not duplicate provider, permission, memory, guard, or validation logic.
-
-## Core command families
-
-Exact names may evolve, but the required capabilities are:
-
-```text
-lbe session create
-lbe session continue
-lbe session status
-lbe session inspect
-lbe session evidence
-lbe session validate
-
-lbe code
-lbe audit
-lbe investigate
-
-lbe provider list
-lbe provider check
-lbe provider select
-
-lbe policy show
-lbe permissions show
-```
-
-Convenience commands such as `lbe code` may create/continue the appropriate session internally, but session state remains canonical.
-
-## Session creation inputs
-
-At minimum:
-
-```text
-workspace
-mode
-provider/model
-workspace/profile policy
-permission policy
-```
-
-Defaults may come from user configuration, but the resolved values must be visible through `session status`.
-
-## CLI exit proof
-
-- non-interactive use works;
-- structured output is available for external agents/scripts;
-- human-readable output is available for terminal users;
-- no CLI command bypasses runtime authority;
-- session can be continued with a different provider without changing workspace policy.
-
----
-
-# 15. Configuration system
-
-## Goal
-
-Make provider and permission choices user-configurable without embedding environment-specific assumptions into source.
-
-## Configuration levels
-
-Recommended precedence:
-
-```text
-explicit command/session override
-        > workspace profile
-        > user configuration
-        > safe product defaults
-```
-
-Only values allowed to be overridden should participate in this precedence.
-
-## User configuration may define
-
-- default provider/model;
-- provider endpoint references;
-- default operating mode;
-- automatic application of existing approved rules;
-- allowed write/tool classes;
-- network policy;
-- validation behavior;
-- interactive escalation preference;
-- output format preferences.
-
-## Secret handling
-
-Configuration should reference credentials through secure environment/provider mechanisms. Do not persist raw credentials in workspace memory, task records, or logs.
-
----
-
-# 16. Optional API surface
-
-The API should expose the same runtime/session operations needed by external integrations.
-
-It must not implement a second policy engine.
-
-Potential operations:
-
-```text
-create session
-continue session
-submit task/input
-inspect status
-retrieve evidence
-validate
-cancel
-provider health
-```
-
-CLI and API should converge on the same runtime service layer.
-
----
-
-# 17. Optional TUI/operator console — after CLI/runtime proof
-
-Do not make TUI a prerequisite for runtime completion.
-
-The TUI may display/control existing runtime state:
-
-- active sessions;
-- workspace;
-- provider/model;
-- mode;
-- task status;
-- active guards/profile;
-- permissions;
-- evidence;
-- validation;
-- escalations;
-- failures/recovery state.
-
-It must consume the same API/runtime contract as CLI and must not become another agent implementation.
-
----
-
-# 18. R7 — End-to-end persistent coding/audit runtime proof
-
-## Goal
-
-Prove the full architecture with real provider switching, governed coding, read-only audit, persistence, resume, and validation.
-
-## Proof A — coding session
-
-1. create session for a real controlled repository;
-2. choose provider A;
-3. coding mode loads workspace identity, rules, permissions, and evidence policy;
-4. user grants/uses a profile allowing bounded edits and tests;
-5. reasoning requests permitted inspection/edit tools;
-6. permission resolver allows pre-authorized actions without repeated prompts;
-7. change is applied only inside allowed scope;
-8. required validation executes;
-9. completion gate records validated outcome;
-10. session state persists.
-
-## Proof B — provider switch
-
-1. continue same session;
-2. switch to provider B;
-3. rehydrate current authoritative context;
-4. verify workspace policy and permissions are unchanged;
-5. continue reasoning without provider becoming authority.
-
-## Proof C — resume after workspace change
-
-1. checkpoint session;
-2. modify relevant source externally;
-3. restart runtime;
-4. resume;
-5. stale source-backed memory is invalidated;
-6. current workspace evidence wins;
-7. session/task constraints survive appropriately.
-
-## Proof D — audit mode
-
-1. open audit session on same or another project;
-2. enforce read-only policy;
-3. retrieve patterns where useful;
-4. inspect live current workspace;
-5. run deterministic guards/validation;
-6. produce evidence-backed verdict/explanation;
-7. prove no workspace mutation occurred.
-
-## Proof E — escalation
-
-1. coding model requests operation outside configured authority;
-2. resolver returns `ESCALATE` or `DENY`;
-3. provider cannot bypass the decision;
-4. after explicit authority change, runtime can proceed according to the newly active policy.
-
-## R7 completion condition
-
-The runtime is considered architecture-complete for this milestone only when all required proofs pass from the installed/normal execution path, not just unit-test fakes.
-
----
-
-# 19. Release and packaging
-
-After R7 proof:
-
-- define supported Python/runtime matrix from evidence;
-- ensure provider dependencies remain optional/modular where possible;
-- validate clean installation;
-- validate CLI entry points from installed package;
-- audit package contents;
-- ensure state/config/secrets/workspace artifacts are excluded;
-- document configuration and migration;
-- run focused and full suites;
-- run installed end-to-end smoke proof;
-- do not publish externally without explicit release action.
-
----
-
-# 20. Implementation sequence
-
-Use this order unless current evidence proves a dependency must change:
-
-```text
-CURRENT
-R2 merge readiness (#28)
-        |
-        v
-R3 runtime -> existing reasoning controller
-        |
-        v
-R4 checkpoint / resume / rehydration
-        |
-        v
-R5 bounded classified recovery
-        |
-        v
+R3  runtime -> reasoning integration
+R4  checkpoint/resume/rehydration
+R5  bounded classified recovery
 R6A provider abstraction
-        |
-        v
-R6B typed mode policies
-        |
-        v
-R6C permission / authorization resolver
-        |
-        v
-R6D context assembly + relevant rule/guard injection
-        |
-        v
-R6E governed tool orchestration
-        |
-        v
-R6F completion / validation gate
-        |
-        v
-CLI command surface over the proven runtime services
-        |
-        v
-optional API integration surface
-        |
-        v
-R7 real end-to-end proof
-        |
-        v
-release/package readiness
-        |
-        v
-optional TUI operator console
+R6B typed mode/policy resolution
+R6C authorization resolution
+R6D context/rule/guard assembly
+R6E governed tool orchestration + ToolReceipt
+R6F evidence-owned completion/validation
+CLI persistent control/projection surface
 ```
 
-### Important implementation note
+They did not prove that the installed `lbe code` command composes all of those authorities in one real coding path. R7 is the first release-level installed composition proof and correctly found that gap.
 
-The CLI shell can be scaffolded earlier if useful, but it must remain a thin wrapper. Do not implement CLI-owned behavior before the corresponding runtime service exists and is tested.
+## 5. R7 — Installed end-to-end persistent agent proof
 
----
+**Classification: `FAIL` — decisive observable-3 falsifier.**
 
-# 21. Slice discipline
-
-Every implementation slice must define:
-
-- exact objective;
-- existing authoritative owner being extended;
-- allowed files/components;
-- explicit exclusions;
-- typed input/output contract;
-- failure behavior;
-- targeted tests;
-- full regression requirement when appropriate;
-- Git diff/scope evidence;
-- acceptance condition.
-
-Do not combine provider adapters, CLI UX, tool orchestration, retry, resume, and policy changes into one large patch.
-
-Recommended branch/PR granularity follows the numbered runtime slices above.
-
----
-
-# 22. Explicit non-goals for the current roadmap
-
-Do not drift into:
-
-- training a dedicated LBE foundation model;
-- passive model learning from all conversations;
-- separate coding/audit model authorities;
-- unrestricted autonomous repair;
-- unrestricted shell access;
-- model-authored guard verdicts;
-- cross-project memory as current truth;
-- replacing Git/current workspace inspection with memory;
-- automatic global-rule creation from one finding;
-- TUI-first product development;
-- provider-specific governance forks;
-- cloud synchronization before local runtime proof;
-- broad multi-agent orchestration before one persistent agent path is proven.
-
----
-
-# 23. Canonical responsibility map
+Evidence reached:
 
 ```text
-User configuration
-    -> delegated authority and defaults
-
-CLI / API / optional TUI
-    -> control surfaces
-
-Persistent runtime
-    -> session/task lifecycle, orchestration, recovery
-
-Provider adapter
-    -> translates provider-specific inference capabilities
-
-LLM reasoning layer
-    -> interpretation, planning, hypotheses, explanation, proposals
-
-Reference retrieval
-    -> historical patterns and candidate guidance
-
-Current workspace inspector
-    -> current project facts
-
-Rules / deterministic guards
-    -> deterministic condition detection
-
-Permission/governance layer
-    -> authorization
-
-Validation
-    -> proof
-
-Validated memory/checkpoints
-    -> bounded persistent context, never replacement truth
+exact-head isolated install                         PASS
+installed lbe identity without source-tree leakage PASS
+persistent installed session create                PASS
+fresh-process session status/inspect                PASS
+one governed coding execution with receipts        FAIL
 ```
 
----
-
-# 24. Final invariant
-
-Every future implementation decision should preserve this chain:
+Decisive runtime evidence:
 
 ```text
-Provider reasons.
-Persistent runtime orchestrates.
-CLI/API/TUI expose the runtime.
-Current workspace supplies facts.
-Relevant rules and guards are selected/injected by LBE.
-Permission policy authorizes actions.
-Pre-authorized actions proceed without repetitive approval.
-Authority expansion is escalated according to policy.
-Deterministic guards detect.
+command_hash: A2B146E0501F096D870E2ED15A4331366FB954E8F137D7CD980EC97E2FBAE7B4
+installed lbe code exit: 0
+outcome: INSUFFICIENT_EVIDENCE
+task status: blocked
+response.read_only: true
+provider stage: planning
+provider approved_tools: workspace.read
+marker: R7_CODE_PROVIDER_AUTHORITY_READ_ONLY=PROVEN
+```
+
+Expected composition:
+
+```text
+installed lbe code
+ -> CLI transport
+ -> persisted SessionMemoryRuntimeBridge identity
+ -> GovernedAgentGateway
+ -> provider reasoning/tool proposal
+ -> R6C authorization_resolver
+ -> R6E GovernedToolOrchestrator
+ -> registered tool handler
+ -> ToolReceipt
+ -> receipt-backed provider continuation
+ -> persistent task/checkpoint state
+ -> CodingCompletionRuntime / deterministic validation
+```
+
+Observed composition:
+
+```text
+installed lbe code
+ -> CLI transport
+ -> persisted SessionMemoryRuntimeBridge
+ -> GovernedAgentGateway
+ -> LBERequestController
+ -> read-only planning / deterministic inspection / explanation
+ -> approved_tools = [workspace.read]
+ -> read_only response
+ -> R6E coding execution/receipt path not reached
+```
+
+Later R7 observables are stopped because they cannot compensate for the missing required coding execution path.
+
+Canonical R7 records:
+
+```text
+docs/acceptance/R7_INSTALLED_END_TO_END_ACCEPTANCE_GATE.md
+docs/acceptance/R7_INSTALLED_END_TO_END_ACCEPTANCE_CHECKPOINT.md
+```
+
+## 6. Current owner map after full plan re-review
+
+### 6.1 CLI
+
+`lbe_guard_inspector/cli.py`
+
+Owns argument parsing and transport into existing owners. It must remain thin and must not become a tool executor, authorization resolver, provider authority, or completion gate.
+
+### 6.2 Persistent runtime/session
+
+`lbe_guard_inspector/session_memory_runtime.py`
+
+Owns persistent session identity, task lifecycle, recovery/checkpoint state, and invocation of the reasoning controller. It does not currently own governed tool dispatch.
+
+### 6.3 Reasoning/gateway
+
+`lbe_guard_inspector/agent_integration.py`
+
+`GovernedAgentGateway` validates persisted identity/mode and currently routes `reasoning.inspect` into the reasoning controller. It can build an R6E `ToolRequest`, but the installed `code` path does not presently execute a provider tool loop through an R6E orchestrator.
+
+### 6.4 Reasoning controller
+
+`lbe_guard_inspector/request_controller.py`
+
+Owns bounded reasoning, evidence selection, deterministic guard inspection, explanation, and optional proposal generation. Its current provider tool contract is read-only (`workspace.read`). This is not a coding execution owner.
+
+### 6.5 Authorization
+
+`lbe_guard_inspector/runtime/authorization_resolver.py`
+
+Accepted R6C owner. Reuse; do not duplicate or move authorization into provider/CLI code.
+
+### 6.6 Governed tool execution
+
+`lbe_guard_inspector/runtime/tool_orchestration.py`
+
+Accepted R6E owner. Owns registered tool lookup, argument validation, R6C authorization, handler invocation, `ToolReceipt`, and operation-id idempotency. Reuse; do not create another dispatcher.
+
+### 6.7 Provider continuation
+
+`lbe_guard_inspector/provider_continuation.py`
+
+Consumes an already-governed `ToolReceipt` and sends a receipt-backed continuation. It deliberately owns no execution authority.
+
+### 6.8 Completion
+
+`lbe_guard_inspector/runtime/completion_runtime.py` plus accepted completion evidence/gate owners.
+
+Terminal completion remains evidence-owned and must not move into provider prose or CLI logic.
+
+## 7. Defect classification
+
+Current classification:
+
+```text
+failure class: INTEGRATION / COMPOSITION
+location: installed normal coding path
+proven earliest incorrect boundary:
+  provider reasoning contract on lbe code receives only workspace.read
+  and returns read_only before R6E coding execution/receipt is reached
+```
+
+This classification does **not** yet prove the exact function that should be edited.
+
+Evidence classes:
+
+```text
+PROVEN
+- installed lbe code reaches GovernedAgentGateway / reasoning controller
+- provider receives approved_tools=[workspace.read]
+- response is read_only
+- existing R6C/R6E/provider-continuation owners exist independently
+- no governed coding receipt is reached on observable 3
+
+SUPPORTED
+- repair should be a composition/wiring correction using existing owners
+
+HYPOTHESIS
+- an existing provider tool-call loop/composition surface is missing or not wired into the installed code route
+
+UNKNOWN
+- exact minimal edit surface until all ToolRequest/ToolReceipt/provider-turn consumers and registrations are traced
+```
+
+## 8. Required bounded repair investigation before implementation
+
+No implementation is authorized by the failed R7 gate itself.
+
+The next engineering slice must first be an investigation-only gate with one question:
+
+> What existing active-owner seam should connect installed `lbe code` / `GovernedAgentGateway` reasoning to the already accepted R6C/R6E governed tool execution and receipt-continuation path, and what is the smallest correction that restores the composition without creating parallel authority?
+
+### Investigation sequence
+
+```text
+1. lock target identity/revision and retain the R7 reproduction
+2. trace cli._run_mode_command -> GovernedAgentGateway -> reasoning controller
+3. enumerate every current ToolRequest / GovernedToolOrchestrator / ToolReceipt construction and consumer
+4. enumerate provider tool-call and continuation implementations, including provider-turn runtimes
+5. trace persistence/correlation requirements for session/task/request/tool-call/operation IDs
+6. identify earliest missing or incorrect composition state
+7. compare with accepted R6E/R6F contracts and tests
+8. state one bounded repair hypothesis
+9. state a falsifier that would disprove that hypothesis
+10. only then activate a separate implementation slice
+```
+
+### Investigation completion predicate
+
+The repair investigation is complete only when all of the following are proven:
+
+```text
+- exact current producer of provider tool requests identified
+- exact intended consumer/executor identified
+- exact receipt continuation seam identified
+- exact persistence/correlation owner identified
+- no already-active alternate coding path was missed
+- smallest edit surface identified
+- no new authority is required
+- focused regression and installed runtime acceptance plan defined before editing
+```
+
+## 9. Repair constraints
+
+Any later implementation slice must:
+
+```text
+reuse SessionMemoryRuntimeBridge
+reuse R6C authorization_resolver
+reuse R6E GovernedToolOrchestrator / ToolRegistry / ToolReceipt
+reuse receipt-backed provider continuation
+reuse CodingCompletionRuntime
+preserve provider-neutral architecture
+preserve operation-id idempotency
+preserve workspace/mode/policy identity
+preserve read-only audit/investigation behavior
+```
+
+Forbidden repair patterns:
+
+```text
+second tool dispatcher
+second authorization resolver
+provider-direct filesystem/process writes
+CLI-owned execution
+provider-owned completion truth
+new session store
+new provider authority
+new receipt type that bypasses ToolReceipt
+hardcoded provider-specific coding authority outside accepted adapters
+architecture rewrite before proving the missing seam
+```
+
+## 10. Planned implementation sequence — provisional until repair investigation closes
+
+The following is **not yet authorized implementation**. It is the expected evidence-driven sequence once the owner is proven:
+
+```text
+A. add/adjust focused contract test reproducing the missing installed/gateway composition
+B. make the smallest change in the proven active composition owner
+C. wire existing R6E registry/orchestrator into the provider tool-call path
+D. convert the resulting ToolReceipt through existing provider continuation
+E. preserve correlation IDs and persisted task lifecycle
+F. preserve audit/investigation read-only routes
+G. run focused R6C/R6E/gateway/provider-continuation/completion regressions
+H. run duplicate-authority scan
+I. build/install exact repair head into clean isolated environment
+J. rerun R7 observable 3 and require a real governed execution receipt
+K. only after observable 3 PASS continue R7 observables 4-15
+```
+
+If investigation disproves any step or reveals an already-correct alternate owner, revise this sequence before editing.
+
+## 11. R7 rerun acceptance after repair
+
+Observable 3 must prove all of the following on the installed path:
+
+```text
+provider proposes/requests one bounded coding action
+LBE constructs the registered governed ToolRequest
+authorization is resolved by R6C
+R6E executes or fail-closes the action
+ToolReceipt is produced with operation/tool/auth/result correlation
+provider continuation consumes that receipt
+no direct provider workspace mutation occurs
+fresh installed process can inspect persisted task/session consequence
+```
+
+Only then continue:
+
+```text
+4. provider/model switch preserves LBE identity/policy
+5. fresh-process resume preserves same session/task
+6. external workspace change is re-observed/revalidated
+7. audit/investigation remains read-only
+8. out-of-authority request fail-closes without mutation
+9. receipt/provider continuation correlation persists
+10. provider completion remains provisional
+11. validated terminal completion persists fresh-process
+12. secret/state leakage exclusion
+13. focused installed/runtime regression
+14. source/diff discipline
+15. clean worktree + exact limitations
+```
+
+## 12. Release/package readiness
+
+**Classification: `BLOCKED_BY_R7`.**
+
+Release/package readiness cannot activate until repaired R7 returns PASS. Publication remains blocked.
+
+After R7 PASS, release/package readiness must separately prove package contents, exact installed identity, secret/state exclusion, supported runtime/environment assumptions, regression results, release metadata, and clean publication inputs.
+
+## 13. Evidence-reconciled progression
+
+```text
+R3 PASS
+ -> R4 PASS
+ -> R5 PASS
+ -> R6A PASS
+ -> R6B PASS
+ -> R6C PASS
+ -> R6D PASS
+ -> R6E PASS
+ -> R6F PASS
+ -> CLI normal-path PASS
+ -> R7 installed E2E FAIL on coding composition
+ -> activate bounded composition-repair INVESTIGATION
+ -> prove exact owner/seam + falsifier
+ -> activate bounded repair IMPLEMENTATION
+ -> focused/integration/runtime validation
+ -> rebuild/install exact repair head
+ -> rerun R7 observable 3
+ -> finish remaining R7 observables
+ -> R7 PASS
+ -> release/package readiness acceptance
+ -> version/tag/publish
+```
+
+## 14. Final invariant
+
+```text
+Provider reasons and proposes.
+Persistent runtime preserves session/task state.
+LBE owns authorization and execution.
+Installed CLI exposes existing authority but does not own or bypass it.
+R6E ToolReceipt is the governed execution evidence boundary.
+Provider continuation consumes receipts but never grants execution authority.
 Validation proves.
-Persistent memory carries only bounded supported context.
+Completion truth belongs to LBE.
+Release claims require installed/runtime/package evidence, not lower-layer inference.
 ```
 
-If a proposed feature creates another owner for any of these responsibilities, stop and reconcile the ownership boundary before implementation.
+## 15. Documentation reconciliation & proposed agent-agency architecture review
+
+This section records the architectural lesson and the proposed future correction. It does
+**not** change current machine-gate state and does **not** activate any new gate.
+
+### CURRENT MACHINE STATE (authoritative)
+
+See the banner at the top of this file and the machine gate:
+
+```text
+phase: R7_INSTALLED_END_TO_END_ACCEPTANCE
+slice: OBSERVABLE_13_INSTALLED_RUNTIME_REGRESSION
+status: OPEN
+observables 1-12: PASS (observable 3 PASS_AFTER_REPAIR)
+observable 13: OPEN (current active slice)
+implementation_allowed: false
+architecture_changes_allowed: false
+next_phase_locked: true
+```
+
+### HISTORICAL FAILURE (preserved, not current state)
+
+The earlier observable-3 installed coding-composition failure (installed `lbe code` reached
+`GovernedAgentGateway` → `LBERequestController` with `approved_tools=[workspace.read]` and
+`read_only=true`, never reaching the accepted R6E governed coding path) is **historical
+evidence**. It was addressed by the recorded repair investigation and observable 3 is recorded
+`PASS_AFTER_REPAIR`. Any "R7 FAIL / repair not yet activated" lines in the body above are
+historical records, not current machine-gate state.
+
+### ARCHITECTURAL LESSON
+
+> **The reasoning controller became the agent.**
+
+`LBERequestController` and the fixed `ReasoningPlan` workflow evolved from a bounded read-only
+inspection mechanism into the central cognitive path:
+
+```text
+provider = constrained planner / explainer
+LBE     = reasoning workflow engine
+```
+
+The intended architecture is:
+
+```text
+reasoning agent
+    ↓ uses
+LBE governed capabilities
+```
+
+Corrected invariant:
+
+> **LBE governs an agent's capabilities and consequences; it does not prescribe the agent's
+> reasoning procedure.**
+
+Ownership boundary:
+
+```text
+Agent / provider owns:
+- reasoning
+- investigation strategy
+- hypothesis formation
+- capability / tool selection
+- replanning after results
+- interpretation
+- communication
+
+LBE owns:
+- workspace / session identity
+- mode / policy
+- authorization
+- capability boundaries
+- governed execution
+- operation identity
+- ToolReceipt
+- evidence provenance
+- persistence
+- deterministic validation / completion truth
+```
+
+### WHAT WAS BUILT / WHAT WAS INTENDED / WHAT MUST CHANGE
+
+| Item | WAS BUILT | WAS INTENDED | MUST CHANGE |
+|------|-----------|--------------|-------------|
+| Mandatory `ReasoningPlan` | provider must emit a fixed plan structure each turn | optional structured output for planning/inspection | make optional; main agent may operate without it |
+| Reasoning contract | `workspace.read`-only; LBE builds evidence, asks plan, selects/runs guard, asks explanation | provider freely chooses among registered capabilities | expose capabilities the agent may invoke; do not encode the sequence |
+| Guard selection | driven by LBE workflow | one available capability | `LBERequestController` -> bounded/specialist investigation capability (`guard.inspect`) |
+| Deterministic Guard Inspector | correct deterministic mechanism | same | REPOSITION, not discarded |
+| R6C authorization | correct deterministic authorization | same | NOT a mistake; remains authoritative execution boundary |
+| R6E governed tool orchestration | correct deterministic execution | same | NOT a mistake; remains authoritative execution boundary |
+| ToolReceipt | correct execution-evidence boundary | same | NOT a mistake; remains the execution evidence boundary |
+| Provider continuation | correct receipt-backed continuation | same | NOT a mistake; remains receipt-backed |
+| Persistent session/task state | correct LBE-owned persistence | same | NOT a mistake; remains LBE-owned |
+| Completion validation | correct LBE-owned deterministic truth | same | NOT a mistake; remains LBE-owned |
+
+Deterministic guards, authorization, receipts, persistence, and completion evidence are
+**not mistakes**. The mistake is their placement around the reasoning agent — the controller
+became the agent instead of the agent using governed capabilities.
+
+### PROPOSED FUTURE CORRECTION (proposed follow-on review, not an active gate)
+
+Reposition rather than discard:
+
+```text
+LBERequestController    -> bounded/specialist investigation capability
+ReasoningPlan           -> optional structured contract for planning/inspection
+Guard Inspector         -> deterministic capability available to an agent
+R6C / R6E / ToolReceipt -> remain the authoritative governed-execution boundary
+memory / context        -> resources supplied to reasoning, not replacements for reasoning
+```
+
+Future architecture acceptance question (recorded as a proposed follow-on review):
+
+> Can a reasoning agent independently choose among registered LBE capabilities, perform
+> multiple reasoning/tool turns, revise its approach from receipts/evidence, and complete
+> work without LBE prescribing a fixed cognitive workflow, while all mutation, authorization,
+> identity, persistence, receipts, and completion authority remain governed by LBE?
+
+Primary record: `docs/design/AGENT_AGENCY_LBE_AUTHORITY_SEPARATION.md`.

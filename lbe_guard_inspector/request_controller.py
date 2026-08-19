@@ -33,8 +33,7 @@ from .runtime.context_assembly import assemble_reasoning_context
 from .workspace_identity import resolve_workspace_identity, scoped_context
 
 
-_KNOWN_TOOLS = frozenset({"workspace.read", "workspace.replace_text"})
-_DEFAULT_APPROVED_TOOLS = ("workspace.read",)
+_APPROVED_TOOLS = frozenset({"workspace.read"})
 
 
 class LBERequestController:
@@ -68,25 +67,6 @@ class LBERequestController:
         self._guard_planner = guard_planner or GuardPlanner()
         self._explanation_planner = explanation_planner or ExplanationPlanner()
         self._proposal_planner = proposal_planner
-        self._approved_tools = _DEFAULT_APPROVED_TOOLS
-
-    def configure_approved_tools(self, approved_tools: tuple[str, ...]) -> None:
-        """Accept tool visibility selected by the session-bound runtime gateway.
-
-        This changes only what the provider may request. It does not authorize
-        execution; R6C remains the execution authority.
-        """
-        if not isinstance(approved_tools, tuple) or not all(
-            isinstance(item, str) and item.strip() for item in approved_tools
-        ):
-            raise TypeError("approved_tools must be a tuple of non-empty tool IDs")
-        normalized = tuple(dict.fromkeys(item.strip() for item in approved_tools))
-        unknown = sorted(set(normalized) - _KNOWN_TOOLS)
-        if unknown:
-            raise ValueError(f"unknown approved tools: {unknown}")
-        if "workspace.read" not in normalized:
-            raise ValueError("workspace.read must remain available to bounded reasoning")
-        self._approved_tools = normalized
 
     def run(self, request: LBERequest) -> LBEResponse:
         """Run planning, deterministic inspection, and explanation in read-only mode."""
@@ -126,7 +106,7 @@ class LBERequestController:
             },
             workspace_profile=profile,
             approved_guard_ids=approved_guards,
-            approved_tools=tuple(sorted(self._approved_tools)),
+            approved_tools=tuple(sorted(_APPROVED_TOOLS)),
             reference_context=assemble_reasoning_context(
                 request_context=request.reference_context,
                 indexed_reference_evidence=validated_evidence_package["indexed_reference_evidence"],
@@ -293,13 +273,9 @@ class LBERequestController:
                 tuple(plan.validation_requests),
             )
         for evidence in plan.evidence_requests:
-            if evidence.tool_id not in self._approved_tools:
+            if evidence.tool_id not in _APPROVED_TOOLS:
                 raise _ControllerFailure("UNKNOWN_TOOL", f"Reasoning plan requested unknown tool: {evidence.tool_id}")
             _bounded_path(root, evidence.path)
-        for tool_request in getattr(plan, "tool_requests", ()):
-            if tool_request.tool_id not in _KNOWN_TOOLS:
-                raise _ControllerFailure("UNKNOWN_TOOL", f"Reasoning plan requested unknown tool: {tool_request.tool_id}")
-            _bounded_path(root, tool_request.path)
         if plan.candidate_guard_ids and not plan.evidence_requests:
             raise _ControllerFailure("MISSING_EVIDENCE_REQUEST", "A selected guard requires a bounded evidence request.")
 

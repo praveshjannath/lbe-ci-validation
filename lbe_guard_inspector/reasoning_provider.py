@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import http.client
 import socket
+import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath, PureWindowsPath
@@ -40,6 +43,8 @@ class ProviderError(RuntimeError):
 
 
 class JsonTransport(Protocol):
+    supports_cancellation: bool
+
     def post_json(
         self,
         *,
@@ -49,8 +54,19 @@ class JsonTransport(Protocol):
         timeout_seconds: float,
     ) -> Mapping[str, Any]: ...
 
+    def cancel(self) -> None: ...
+
 
 class UrllibJsonTransport:
+    supports_cancellation = False  # http.client/urlib cannot be reliably cancelled from another thread
+
+    def __init__(self) -> None:
+        pass
+
+    def cancel(self) -> None:
+        """Request cancellation - not supported by urllib transport."""
+        raise ProviderError("PROVIDER_CANCELLED", "live provider cancellation is not available for this transport")
+
     def post_json(
         self,
         *,

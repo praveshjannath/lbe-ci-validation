@@ -14,15 +14,7 @@ from .runtime.task_completion_policy import (
     DEFAULT_TASK_COMPLETION_POLICY_CATALOG,
     TaskCompletionPolicyCatalog,
 )
-from .runtime.tool_orchestration import (
-    GovernedToolOrchestrator,
-    ToolExecutionContext,
-    ToolReceiptStatus,
-    ToolRegistry,
-    ToolRequest,
-    build_workspace_replace_text_handler,
-    workspace_replace_text_spec,
-)
+from .runtime.tool_orchestration import ToolExecutionContext, ToolRequest
 from .session_memory_runtime import ReasoningController, SessionMemoryRuntimeBridge
 
 
@@ -119,7 +111,6 @@ class GovernedAgentGateway:
         if not isinstance(request, AgentRequestEnvelope):
             raise AgentIntegrationError("invalid_request", "request must be AgentRequestEnvelope")
         mode_decision = self.resolve_runtime_mode(request)
-        self._configure_reasoning_tools(mode_decision)
         if request.operation_id != self._REASONING_OPERATION:
             raise AgentIntegrationError(
                 "unsupported_operation",
@@ -164,9 +155,6 @@ class GovernedAgentGateway:
                 reference_context=reference_context,
                 max_results=max_results,
             )
-            response = result.response
-            if response.outcome == "COMPLETED":
-                self._execute_planned_tools(request=request, response=response)
             producers.produce_source_change(
                 task_id=request.task_id,
                 operation_id=request.operation_id,
@@ -180,12 +168,8 @@ class GovernedAgentGateway:
                 task_id=request.task_id,
                 operation_id=request.operation_id,
             )
-            state = self._runtime.load_task_status(task_id=request.task_id)
-            if state is None:
-                raise AgentIntegrationError(
-                    "runtime_state_missing",
-                    "coding execution completed without persisted task lifecycle state",
-                )
+            response = result.response
+            state = result.task_state
         else:
             response = self._runtime.run_reasoning(
                 controller=self._reasoning_controller,
@@ -194,8 +178,6 @@ class GovernedAgentGateway:
                 reference_context=reference_context,
                 max_results=max_results,
             )
-            if response.outcome == "COMPLETED":
-                self._execute_planned_tools(request=request, response=response)
             state = self._runtime.load_task_status(task_id=request.task_id)
             if state is None:
                 raise AgentIntegrationError(
@@ -240,16 +222,6 @@ class GovernedAgentGateway:
             )
         return decision
 
-    def _configure_reasoning_tools(self, mode_decision: ModeDecision) -> None:
-        """Expose only tools supported by the already-resolved runtime mode."""
-        configure = getattr(self._reasoning_controller, "configure_approved_tools", None)
-        if not callable(configure):
-            return
-        tools = ["workspace.read"]
-        if mode_decision.mode == "coding" and "modify" in mode_decision.capabilities:
-            tools.append("workspace.replace_text")
-        configure(tuple(tools))
-
     def tool_execution_context(self, request: AgentRequestEnvelope) -> ToolExecutionContext:
         """Supply the R6B decision to the existing R6E context contract."""
         return ToolExecutionContext(
@@ -258,80 +230,6 @@ class GovernedAgentGateway:
             workspace_root=self._runtime.workspace_root,
             configured_root_id=self._runtime.project_workspace_id,
         )
-
-    def _execute_planned_tools(
-        self,
-        *,
-        request: AgentRequestEnvelope,
-        response: LBEResponse,
-    ) -> None:
-        plan = response.plan
-        planned = tuple(getattr(plan, "tool_requests", ())) if plan is not None else ()
-        if not planned:
-            return
-
-        registry = ToolRegistry()
-        registry.register(workspace_replace_text_spec(), build_workspace_replace_text_handler())
-        orchestrator = GovernedToolOrchestrator(registry=registry)
-        for item in planned:
-            arguments = getattr(item, "arguments", None)
-            tool_id = getattr(item, "tool_id", None)
-            if not isinstance(arguments, Mapping) or not isinstance(tool_id, str):
-                self._runtime.record_task_status(
-                    task_id=request.task_id,
-                    status=TaskStatus.FAILED,
-                    last_outcome="INVALID_TOOL_REQUEST",
-                )
-                raise AgentIntegrationError(
-                    "invalid_tool_request",
-                    "reasoning plan returned an invalid governed tool request",
-                )
-            receipt = orchestrator.invoke(
-                self.tool_request(
-                    request=request,
-                    tool_id=tool_id,
-                    arguments=arguments,
-                )
-            )
-            self._runtime.ingest_tool_result(
-                tool_name=receipt.tool_id,
-                result={
-                    "operation_id": receipt.operation_id,
-                    "status": receipt.status.value,
-                    "output": dict(receipt.output or {}),
-                    "evidence": [dict(value) for value in receipt.evidence],
-                    "error_code": receipt.error_code,
-                    "error_message": receipt.error_message,
-                    "authorization": (
-                        {
-                            "verdict": receipt.authorization.verdict.value,
-                            "capability": receipt.authorization.capability,
-                            "rationale": receipt.authorization.rationale,
-                        }
-                        if receipt.authorization is not None
-                        else None
-                    ),
-                },
-                success=receipt.status is ToolReceiptStatus.EXECUTED,
-                task_id=request.task_id,
-                source_message_id=request.request_id,
-            )
-            if receipt.status is ToolReceiptStatus.EXECUTED:
-                continue
-            terminal_status = (
-                TaskStatus.BLOCKED
-                if receipt.status in {ToolReceiptStatus.DENIED, ToolReceiptStatus.ESCALATED}
-                else TaskStatus.FAILED
-            )
-            self._runtime.record_task_status(
-                task_id=request.task_id,
-                status=terminal_status,
-                last_outcome=f"TOOL_{receipt.status.value}",
-            )
-            raise AgentIntegrationError(
-                (receipt.error_code or "tool_execution_failed").lower(),
-                receipt.error_message or f"governed tool execution failed: {receipt.tool_id}",
-            )
 
     def _establish_coding_contract(
         self,

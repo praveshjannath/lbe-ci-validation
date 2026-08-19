@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lbe-guard-inspector"
-version = "2.0.1"
-description = "Persistent provider-neutral governed agent runtime for local workspaces"
+version = "2.0.3"
+description = "Deterministic local workspace inspection with evidence-bound guard verdicts"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,8 +14,10 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "build==1.5.0",
   "pytest==8.3.5"
+]
+tui = [
+  "textual==8.2.8"
 ]
 
 [project.scripts]
@@ -34,7 +36,12 @@ namespaces = true
 
 [tool.setuptools.package-data]
 schemas = ["*.json"]
-"lbe_guard_inspector.memory" = ["memory_schema.sql"]
+lbe_guard_inspector = [
+  "memory/*.sql",
+  "runtime/cline_worker/*.mjs",
+  "runtime/cline_worker/*.json",
+  "runtime/cline_worker/node_modules/**/*"
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import subprocess
 from pathlib import Path
 
@@ -60,29 +59,6 @@ def _producers(runtime: SessionMemoryRuntimeBridge) -> CompletionEvidenceProduce
     return CompletionEvidenceProducers(runtime=runtime)
 
 
-def _executed_replace(runtime: SessionMemoryRuntimeBridge, root: Path) -> None:
-    target = root / "tracked.txt"
-    before = target.read_bytes()
-    target.write_text("after\n", encoding="utf-8")
-    after = target.read_bytes()
-    runtime.ingest_tool_result(
-        tool_name="workspace.replace_text",
-        result={
-            "operation_id": "reasoning.inspect:request-1:workspace.replace_text",
-            "status": "EXECUTED",
-            "output": {
-                "path": "tracked.txt",
-                "before_sha256": hashlib.sha256(before).hexdigest(),
-                "after_sha256": hashlib.sha256(after).hexdigest(),
-                "replacement_count": 1,
-            },
-        },
-        success=True,
-        task_id="task-1",
-        source_message_id="request-1",
-    )
-
-
 def _passing_validation_run(command: tuple[str, ...], **_: object) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, 0, stdout="3 passed\n", stderr="")
 
@@ -92,7 +68,7 @@ def test_source_change_passes_only_for_live_changed_task_workspace(tmp_path: Pat
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
 
     evidence = producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
@@ -121,39 +97,6 @@ def test_missing_live_change_does_not_pass_even_with_provider_claim(tmp_path: Pa
     assert "provider" not in evidence.details
 
 
-def test_runtime_artifact_without_governed_write_does_not_pass_source_change(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    runtime = _runtime(tmp_path, root)
-    producers = _producers(runtime)
-    baseline = producers.capture_workspace_snapshot()
-    (root / "c5-runtime-state").mkdir()
-    (root / "c5-runtime-state" / "workspace.db").write_text("generated", encoding="utf-8")
-
-    evidence = producers.produce_source_change(
-        task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
-    )
-
-    assert evidence.status == "FAIL"
-    assert evidence.details["task_changed_paths"] == []
-    assert "tool_receipt_memory_id" not in evidence.details
-
-
-def test_source_change_becomes_stale_when_receipt_hash_no_longer_matches(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    runtime = _runtime(tmp_path, root)
-    producers = _producers(runtime)
-    baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
-    (root / "tracked.txt").write_text("changed again\n", encoding="utf-8")
-
-    evidence = producers.produce_source_change(
-        task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
-    )
-
-    assert evidence.status == "STALE"
-    assert evidence.details["receipt_path"] == "tracked.txt"
-
-
 def test_preexisting_workspace_change_is_not_credited_to_the_new_task(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     (root / "preexisting.txt").write_text("unrelated\n", encoding="utf-8")
@@ -175,7 +118,7 @@ def test_source_change_becomes_stale_when_prior_live_change_disappears(tmp_path:
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     initial_baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=initial_baseline
     )
@@ -194,7 +137,7 @@ def test_git_status_passes_for_expected_uncommitted_task_diff(tmp_path: Path) ->
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
     )
@@ -211,7 +154,7 @@ def test_git_status_fails_when_live_state_has_unrelated_changes(tmp_path: Path) 
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
     )
@@ -275,7 +218,7 @@ def test_producer_retry_is_idempotent_and_conflicting_replacement_fails_closed(t
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     first = producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
     )
@@ -305,7 +248,7 @@ def test_completion_remains_blocked_without_focused_test_evidence(tmp_path: Path
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
     )
@@ -331,7 +274,7 @@ def test_registered_focused_test_completes_the_existing_gate(
     runtime = _runtime(tmp_path, root)
     producers = _producers(runtime)
     baseline = producers.capture_workspace_snapshot()
-    _executed_replace(runtime, root)
+    (root / "tracked.txt").write_text("after\n", encoding="utf-8")
     producers.produce_source_change(
         task_id="task-1", operation_id="reasoning.inspect", baseline=baseline
     )

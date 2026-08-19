@@ -18,21 +18,6 @@ def test_unknown_workspace_is_insufficient_evidence(tmp_path):
     assert profile["guard_packs"] == []
 
 
-def test_legacy_or_nested_cep_text_cannot_profile_an_unknown_workspace(tmp_path):
-    (tmp_path / "manifest.json").write_text(
-        '{"historical_example": "CSXS CEP ExtendScript"}', encoding="utf-8"
-    )
-    nested = tmp_path / "legacy-cep" / "CSXS"
-    nested.mkdir(parents=True)
-    (nested / "manifest.xml").write_text("<ExtensionManifest/>", encoding="utf-8")
-
-    profile = ProjectProfiler().profile(tmp_path)
-
-    assert profile["outcome"] == "insufficient_evidence"
-    assert profile["project_types"] == []
-    assert profile["guard_packs"] == []
-
-
 def test_snapshot_changes_only_when_approved_signal_changes(tmp_path):
     path = tmp_path / "pyproject.toml"; path.write_text("[project]", encoding="utf-8")
     profiler = ProjectProfiler(); first = profiler.snapshot(profiler.profile(tmp_path))

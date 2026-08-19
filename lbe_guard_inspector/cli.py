@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Sequence
@@ -69,31 +68,6 @@ def build_parser() -> argparse.ArgumentParser:
     continue_parser.add_argument("--provider")
     continue_parser.add_argument("--model")
     continue_parser.set_defaults(handler=_session_continue)
-
-    checkpoint = session_commands.add_parser(
-        "checkpoint", help="Record current file facts and persist a session checkpoint"
-    )
-    _add_database_argument(checkpoint)
-    checkpoint.add_argument("--session-id", required=True)
-    checkpoint.add_argument("--task-id", required=True)
-    checkpoint.add_argument(
-        "--track-file",
-        action="append",
-        required=True,
-        help="Workspace-relative file to record as a current SHA-256 fact; repeat as needed",
-    )
-    checkpoint.add_argument(
-        "--compaction",
-        required=True,
-        help="Path to the existing compaction JSON payload",
-    )
-    checkpoint.add_argument(
-        "--constraint",
-        action="append",
-        default=[],
-        help="Active constraint to preserve with the checkpoint; repeat as needed",
-    )
-    checkpoint.set_defaults(handler=_session_checkpoint)
 
     status = session_commands.add_parser("status", help="Read persisted session status")
     _add_database_argument(status)
@@ -171,6 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     permissions_show.add_argument("--session-id", required=True)
     permissions_show.set_defaults(handler=_permissions_show)
 
+    tui = commands.add_parser("tui", help="Open the persisted Textual session projection")
+    _add_database_argument(tui)
+    tui.add_argument("--session-id", required=True)
+    tui.add_argument("--provider-config", help="Explicit provider config for non-streaming turn execution")
+    tui.set_defaults(handler=_tui)
+
     return parser
 
 
@@ -179,7 +159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         payload = args.handler(args)
-    except (ValueError, TypeError, FileNotFoundError, RuntimeError, subprocess.CalledProcessError) as exc:
+    except (ValueError, TypeError, FileNotFoundError, RuntimeError) as exc:
         _emit(
             {
                 "ok": False,
@@ -233,35 +213,6 @@ def _session_continue(args: argparse.Namespace) -> dict[str, Any]:
         "action": "session.continue",
         "session": runtime.session_state.as_dict(),
         "context": packet,
-    }
-
-
-def _session_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
-    store = WorkspaceMemoryStore(args.database)
-    state = _require_session(store, args.session_id)
-    task = store.load_session_task(
-        session_id=state.session_id,
-        task_id=args.task_id,
-        project_workspace_id=state.project_workspace_id,
-    )
-    if task is None:
-        raise FileNotFoundError("persistent session task not found")
-    runtime = _runtime_from_state(database=args.database, state=state)
-    memory_ids = [
-        runtime.adapter.record_file_hash(relative_path=path, task_id=args.task_id)
-        for path in args.track_file
-    ]
-    checkpoint_id = runtime.checkpoint(
-        compaction=args.compaction,
-        active_constraints=args.constraint,
-    )
-    return {
-        "action": "session.checkpoint",
-        "session_id": runtime.session_id,
-        "task_id": args.task_id,
-        "checkpoint_id": checkpoint_id,
-        "tracked_file_memory_ids": memory_ids,
-        "active_constraints": list(args.constraint),
     }
 
 
@@ -411,6 +362,33 @@ def _provider_select(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _tui(args: argparse.Namespace) -> dict[str, Any]:
+    from .memory.operational_history import SessionOperationalHistory
+    from .openai_compatible_event_adapter import OpenAICompatibleEventAdapter
+    from .persistent_turn_control import PersistentTurnControl
+    from .provider_turn_runtime import BackgroundProviderTurnRuntime, NonStreamingProviderTurnRuntime
+    from .reasoning_config import load_provider_config
+    from .textual_tui import run_textual_tui
+
+    store = WorkspaceMemoryStore(args.database)
+    state = _require_session(store, args.session_id)
+    history = SessionOperationalHistory(store=store)
+    provider_runtime = None
+    if args.provider_config is not None:
+        if state.provider_id != "openai-compatible":
+            raise ValueError("Textual non-streaming execution currently requires openai-compatible session provider")
+        config = load_provider_config(args.provider_config)
+        if config.model != state.provider_model:
+            raise ValueError("provider config model must match persisted session model")
+        provider_runtime = BackgroundProviderTurnRuntime(history=history, foreground=NonStreamingProviderTurnRuntime(history=history, adapter=OpenAICompatibleEventAdapter(config=config), provider_id=state.provider_id))
+    run_textual_tui(
+        history=history,
+        session_id=state.session_id,
+        control=PersistentTurnControl(history=history, provider_runtime=provider_runtime),
+    )
+    return {"action": "tui", "session_id": state.session_id}
+
+
 def _code(args: argparse.Namespace) -> dict[str, Any]:
     return _run_mode_command(args, AgentMode.CODING, action="code")
 
@@ -446,6 +424,14 @@ def _run_mode_command(
     )
     if handle.descriptor.provider_id != state.provider_id:
         raise ValueError("provider adapter identity does not match persisted session provider")
+    if mode is AgentMode.CODING:
+        from .runtime.governed_coding import GovernedClineReasoningController
+
+        controller = GovernedClineReasoningController(
+            runtime=runtime,
+            provider_id=state.provider_id,
+            provider_config=provider_config,
+        )
 
     gateway = GovernedAgentGateway(runtime=runtime, reasoning_controller=controller)
     request_id = args.request_id.strip() if args.request_id else f"request-{uuid4()}"

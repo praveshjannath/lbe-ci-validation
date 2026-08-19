@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+fail() {
+  echo "LBE WORKSPACE LOCK: BLOCKED: $1" >&2
+  exit 1
+}
+
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+[ "$branch" = "main" ] || fail "commits are allowed only on main"
+
+root="$(git rev-parse --show-toplevel)"
+primary="$(git worktree list --porcelain | awk 'NR==1 && $1=="worktree" { sub(/^worktree /, ""); print; exit }')"
+[ -n "$primary" ] || fail "cannot resolve primary worktree"
+root_norm="$(cd "$root" && pwd -P)"
+primary_norm="$(cd "$primary" && pwd -P)"
+[ "$root_norm" = "$primary_norm" ] || fail "commits from a secondary worktree are forbidden"
+
+python scripts/check-implementation-gate.py
+
+echo "LBE WORKSPACE LOCK: PASS — commit from canonical main worktree"
+exit 0

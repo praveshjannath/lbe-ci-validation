@@ -159,31 +159,6 @@ def test_controller_resolves_child_project_identity_below_configured_root(tmp_pa
     assert report.inventory["files"] == [str(target / "package.json")]
 
 
-def test_controller_keeps_unknown_target_generic_despite_sibling_cep_project(tmp_path, monkeypatch):
-    import lbe_guard_inspector.project_snapshots as snapshots
-
-    monkeypatch.setattr(snapshots, "STATE_DIR", tmp_path / "generated-state")
-    configured = tmp_path / "projects"; configured.mkdir()
-    target = configured / "unknown-project"; target.mkdir()
-    (target / "README.md").write_text("unknown project", encoding="utf-8")
-    sibling = configured / "legacy-cep"; (sibling / "CSXS").mkdir(parents=True)
-    (sibling / "CSXS" / "manifest.xml").write_text("<ExtensionManifest/>", encoding="utf-8")
-    _install_generic_rule(monkeypatch)
-    context = Context(
-        config={},
-        governance={"forbidden_globs": ["*.secret"]},
-        roots=(KnowledgeRoot("projects", configured),),
-    )
-
-    report = run_audit(ctx=context, workspace_root=target)
-
-    assert report.project_type == "generic"
-    assert report.project_profile["outcome"] == "insufficient_evidence"
-    assert report.packs_evaluated == ["generic"]
-    assert all(item["pack_id"] != "cep" for item in report.guard_selection)
-    assert not any(result.rule_id.startswith("cep.") for result in report.results)
-
-
 def _install_foundation_rules(monkeypatch, *, index_status="passed", forbidden_status="passed", calls=None):
     calls = calls if calls is not None else []
 

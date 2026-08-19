@@ -9,14 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Mapping
 
-from .coding_reasoning_provider import ToolAwareOpenAICompatibleReasoningBackend
-from .first_party_reasoning_provider import (
-    AnthropicReasoningBackend,
-    GeminiReasoningBackend,
-    require_api_key,
-)
 from .reasoning_contracts import ReasoningBackend
-from .reasoning_provider import ProviderConfig
+from .reasoning_provider import OpenAICompatibleReasoningBackend, ProviderConfig
 
 
 @dataclass(frozen=True)
@@ -105,47 +99,13 @@ def openai_compatible_factory(config: ProviderConfig) -> ProviderHandle:
                 context_limit=None,
             ),
         ),
-        backend=ToolAwareOpenAICompatibleReasoningBackend(config=config),
-    )
-
-
-def openai_factory(config: ProviderConfig) -> ProviderHandle:
-    require_api_key(config, "openai")
-    return _handle("openai", config, ToolAwareOpenAICompatibleReasoningBackend(config=config))
-
-
-def anthropic_factory(config: ProviderConfig) -> ProviderHandle:
-    return _handle("anthropic", config, AnthropicReasoningBackend(config=config))
-
-
-def gemini_factory(config: ProviderConfig) -> ProviderHandle:
-    return _handle("gemini", config, GeminiReasoningBackend(config=config))
-
-
-def _handle(provider_id: str, config: ProviderConfig, backend: ReasoningBackend) -> ProviderHandle:
-    return ProviderHandle(
-        descriptor=ProviderDescriptor(
-            provider_id=provider_id,
-            model_id=config.model.strip(),
-            capabilities=ProviderCapabilities(
-                streaming=False,
-                tool_calls=False,
-                structured_output=True,
-                context_limit=None,
-            ),
-        ),
-        backend=backend,
+        backend=OpenAICompatibleReasoningBackend(config=config),
     )
 
 
 def default_provider_registry() -> ProviderRegistry:
     """Return built-in provider adapters without reading environment/runtime state."""
-    return ProviderRegistry({
-        "openai-compatible": openai_compatible_factory,
-        "openai": openai_factory,
-        "anthropic": anthropic_factory,
-        "gemini": gemini_factory,
-    })
+    return ProviderRegistry({"openai-compatible": openai_compatible_factory})
 
 
 def _provider_id(value: str) -> str:
