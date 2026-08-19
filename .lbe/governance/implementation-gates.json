@@ -90,9 +90,9 @@
     ],
     "publish_allowed": false,
     "repair_trigger": {
-      "workflow_run": 32269715253,
-      "classification": "RELEASE_HARNESS_DEPENDENCY_INSTALL_DEFECT",
-      "authorized_repair": "install .[test,tui] in validation and publication test environments only"
+      "workflow_run": 32275552544,
+      "classification": "RELEASE_HARNESS_BUILD_BACKEND_PROVISIONING_DEFECT",
+      "authorized_repair": "install setuptools>=75 in validation and publication environments before tests; no product/runtime changes"
     }
   },
   "publication_execution": {
