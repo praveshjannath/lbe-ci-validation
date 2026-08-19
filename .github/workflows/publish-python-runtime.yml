@@ -46,14 +46,14 @@ jobs:
       - name: Install build/test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "setuptools>=75"
+          python -m pip install "setuptools>=75" "build"
           python -m pip install .[test,tui]
 
       - name: Run full Python suite
         run: python -m pytest -q
 
       - name: Build exact Python artifacts
-        run: python -m build
+        run: python -I -m build .
 
       - name: Verify release artifacts
         env:
