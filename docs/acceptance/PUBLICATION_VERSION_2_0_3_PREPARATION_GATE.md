@@ -73,3 +73,8 @@ A PASS on version preparation may advance to the already-authorized single publi
 - tags or GitHub releases without separate authorization;
 - API-token fallback;
 - blind retry after a publication failure.
+\
+## Release-harness repair
+
+Run 32269715253 proved that the full test suite requires the declared tui extra. The only authorized harness repair is changing workflow installation from .[test] to .[test,tui] in ci.yml and publish-python-runtime.yml. No product/runtime change is authorized.
+\

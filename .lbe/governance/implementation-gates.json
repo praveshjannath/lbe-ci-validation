@@ -2,7 +2,7 @@
   "schema_version": 1,
   "active_plan": "docs/acceptance/PUBLICATION_VERSION_2_0_3_PREPARATION_GATE.md",
   "active_phase": "PUBLICATION_VERSION_PREPARATION",
-  "active_slice": "SET_AND_VALIDATE_CANONICAL_VERSION_2_0_3",
+  "active_slice": "REPAIR_RELEASE_VALIDATION_DEPENDENCY_INSTALL",
   "status": "OPEN",
   "implementation_allowed": true,
   "architecture_changes_allowed": false,
@@ -62,11 +62,14 @@
     "distribution": "lbe-guard-inspector",
     "previous_canonical_version": "0.2.0",
     "pypi_project_present": true,
-    "pypi_existing_versions": ["2.0.1", "2.0.2"],
+    "pypi_existing_versions": [
+      "2.0.1",
+      "2.0.2"
+    ],
     "github_pypi_environment": "PASS",
     "workflow_oidc_contract": "PASS",
     "trusted_publisher_binding": "PROVEN_BY_USER_SUPPLIED_PYPI_CONFIGURATION",
-    "trusted_publisher_repository": "Letterblack0306/LBE_Presistent_Agent_wall",
+    "trusted_publisher_repository": "praveshjannath/lbe-ci-validation",
     "trusted_publisher_workflow": "publish-python-runtime.yml",
     "trusted_publisher_environment": "pypi",
     "publish_allowed": false
@@ -81,13 +84,20 @@
       "pyproject.toml",
       ".lbe/governance/implementation-gates.json",
       "docs/acceptance/PUBLICATION_VERSION_2_0_3_PREPARATION_GATE.md",
-      "docs/acceptance/PUBLICATION_EXECUTION_AUTHORIZATION_GATE.md"
+      "docs/acceptance/PUBLICATION_EXECUTION_AUTHORIZATION_GATE.md",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish-python-runtime.yml"
     ],
-    "publish_allowed": false
+    "publish_allowed": false,
+    "repair_trigger": {
+      "workflow_run": 32269715253,
+      "classification": "RELEASE_HARNESS_DEPENDENCY_INSTALL_DEFECT",
+      "authorized_repair": "install .[test,tui] in validation and publication test environments only"
+    }
   },
   "publication_execution": {
     "status": "AUTHORIZED_PENDING_VERSION_PREPARATION_AND_VALIDATION",
-    "repository": "Letterblack0306/LBE_Presistent_Agent_wall",
+    "repository": "praveshjannath/lbe-ci-validation",
     "ref": "main",
     "distribution": "lbe-guard-inspector",
     "version": "2.0.3",
